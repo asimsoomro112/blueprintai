@@ -730,9 +730,9 @@ function WorkbenchContent() {
       </div>
 
       {/* Main workspace split view */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
         {/* Left: Original image */}
-        <div className="lg:w-[22%] border-b lg:border-b-0 lg:border-r border-gray-800/60 bg-[#0a0f1e] flex-shrink-0 overflow-auto">
+        <div className="w-full lg:w-[22%] min-h-[300px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 bg-[#0a0f1e] lg:flex-shrink-0 overflow-auto">
           <div className="p-3">
             <div className="flex items-center gap-2 mb-3 px-1">
               <ImageIcon className="h-4 w-4 text-gray-400" />
@@ -827,7 +827,7 @@ function WorkbenchContent() {
 
         {/* Center: Code editor */}
         {showCodeEditor && (
-        <div className="lg:w-[36%] min-h-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 flex flex-col overflow-hidden">
+        <div className="w-full lg:w-[36%] min-h-[400px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 flex flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800/60 bg-[#0d1117]">
             <Code className="h-4 w-4 text-gray-400" />
             <span className="text-xs font-medium text-gray-400">
@@ -874,7 +874,7 @@ function WorkbenchContent() {
         )}
 
         {/* Right: Live preview */}
-        <div className="min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="w-full min-w-0 flex-1 min-h-[500px] lg:min-h-0 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-800/60 bg-[#0d1117]">
             <div className="flex items-center gap-2 min-w-0">
               <Eye className="h-4 w-4 text-gray-400" />

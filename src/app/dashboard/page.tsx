@@ -135,7 +135,7 @@ function DashboardContent() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
           {stats.map((s, i) => {
             const Icon = s.icon;
             const colors = colorMap[s.color];
@@ -190,54 +190,58 @@ function DashboardContent() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: i * 0.04 }}
-                  className="flex items-center gap-4 px-6 py-4 hover:bg-white/[0.02] transition-colors"
+                  className="flex flex-col sm:flex-row sm:items-center gap-4 px-4 sm:px-6 py-4 hover:bg-white/[0.02] transition-colors"
                 >
-                  {/* Thumbnail */}
-                  <div className="w-14 h-14 rounded-xl bg-gray-800/60 border border-gray-700/40 flex-shrink-0 overflow-hidden flex items-center justify-center">
-                    {c.cloudinaryUrl ? (
-                      <img src={c.cloudinaryUrl} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-5 w-5 text-gray-600" />
-                    )}
-                  </div>
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    {/* Thumbnail */}
+                    <div className="w-14 h-14 rounded-xl bg-gray-800/60 border border-gray-700/40 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      {c.cloudinaryUrl ? (
+                        <img src={c.cloudinaryUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-gray-600" />
+                      )}
+                    </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-200 truncate">{truncate(c.title || "Untitled", 45)}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="flex items-center gap-1 text-xs text-gray-500">
-                        <FileCode className="h-3 w-3" />
-                        {c.outputMode === "react-tailwind" ? "React" : "HTML/CSS"}
-                      </span>
-                      <span className="text-xs text-gray-600">·</span>
-                      <span className="text-xs text-gray-500">{formatRelativeTime(c.createdAt)}</span>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-200 truncate">{truncate(c.title || "Untitled", 45)}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <FileCode className="h-3 w-3" />
+                          {c.outputMode === "react-tailwind" ? "React" : "HTML/CSS"}
+                        </span>
+                        <span className="text-xs text-gray-600">·</span>
+                        <span className="text-xs text-gray-500">{formatRelativeTime(c.createdAt)}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Status badge */}
-                  <span className={`hidden sm:inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${c.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                      c.status === "failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
-                        "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                    }`}>
-                    {c.status}
-                  </span>
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto mt-2 sm:mt-0">
+                    {/* Status badge */}
+                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${c.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                        c.status === "failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                          "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                      }`}>
+                      {c.status}
+                    </span>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <Link
-                      href={`/convert/${c.id}`}
-                      className="p-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
-                      title="View"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/convert/${c.id}`}
+                        className="p-2 rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="p-2 rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               ))}

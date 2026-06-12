@@ -418,7 +418,7 @@ function ConvertContent() {
                           <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
                         </div>
                       </div>
-                      <div className="h-72 overflow-hidden px-4 py-4 font-mono text-[12px] leading-5 text-left">
+                      <div className="h-72 overflow-x-auto overflow-y-hidden px-4 py-4 font-mono text-[12px] leading-5 text-left">
                         {visibleCodeLines.map((line, index) => (
                           <div key={`${line}-${index}`} className="flex gap-3">
                             <span className="w-6 flex-shrink-0 text-right text-gray-600">{index + 1}</span>
