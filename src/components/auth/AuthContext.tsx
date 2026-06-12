@@ -38,11 +38,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(false);
+  const [isDemo, setIsDemo] = useState(!isFirebaseConfigured());
 
   useEffect(() => {
-    if (!isFirebaseConfigured()) {
-      setIsDemo(true);
+    if (isDemo) {
       const cached = localStorage.getItem("blueprint_demo_user");
       if (cached) {
         try {
@@ -222,3 +221,4 @@ export function useAuth() {
   }
   return context;
 }
+

@@ -82,7 +82,7 @@ export async function convertSketchWithGemini(
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-pro";
 
   const systemPrompt = `You are BlueprintAI, an expert frontend engineer and UI reconstruction agent.
 Your first priority is faithful reconstruction of the uploaded hand-drawn wireframe/sketch.
@@ -98,6 +98,10 @@ Core reconstruction rules:
 - Keep the page compact and editorial. Avoid excessive whitespace, huge centered marketing sections, giant hero imagery, floating decorative triangles, or full-bleed app-style sections when the drawing is a boxed webpage.
 - Do not turn every sketch into a generic SaaS landing page. Avoid oversized hero sections, decorative glass-card marketing layouts, and unrelated app-product copy unless the sketch clearly asks for that structure.
 - Prefer restrained, professional, corporate styling: clean spacing, readable typography, subtle borders, neutral backgrounds, modest accent colors, and clear information hierarchy.
+- Apply modern 2026-quality UI only after the sketch structure is preserved: mature dark/light contrast, clear typographic scale, bento-style grouping where appropriate, refined glass/translucent panels only when they improve hierarchy, accessible focus states, and tasteful micro-interaction-ready hover states.
+- Use design tokens consistently: background, surface, border, primary, accent, muted text, success, warning, and danger. Avoid hard-to-read low contrast text.
+- For student/lab submissions, make the output look complete and presentable: header, main content, responsive layout, clear CTAs, empty/fallback states, and a footer when the sketch implies one.
+- Keep generated code dependency-light. React output may use lucide-react icons already available in the preview setup, but avoid unconfigured third-party UI kits.
 - If the sketch is rough, keep the structure faithful and fill unclear copy with realistic placeholder text that matches the subject matter.
 
 Asset and image rules:
@@ -238,7 +242,7 @@ export async function refineGeneratedWebsiteWithGemini(input: {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-pro";
   const genAI = new GoogleGenerativeAI(apiKey!);
 
   const systemPrompt = `You are BlueprintAI's in-workbench code editor.
@@ -246,6 +250,9 @@ The user already has a generated website. Apply only the requested changes to th
 
 Rules:
 - Return complete updated code, not a diff.
+- Preserve current functionality while improving the perceived product quality: spacing, hierarchy, accessibility, responsive behavior, visual rhythm, and component consistency.
+- Prefer premium but readable UI: modern bento sections, refined dark surfaces, precise spacing, balanced typography, and restrained gradients.
+- Do not add dependencies that are not already available in the sandbox/project.
 - Keep the current framework mode working: React/Tailwind for react-tailwind, or standalone HTML/CSS/JS for html-css.
 - React output must be Sandpack-safe TypeScript TSX.
 - Do not import missing files. If App.tsx imports a component, include the matching component file in the components object.
@@ -836,3 +843,4 @@ footer {
     }
   };
 }
+

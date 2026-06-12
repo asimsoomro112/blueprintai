@@ -43,3 +43,4 @@ const adminAuth = isFirebaseAdminConfigured() ? admin.auth() : null;
 const adminDb = isFirebaseAdminConfigured() ? admin.firestore() : null;
 
 export { adminAuth, adminDb, admin };
+

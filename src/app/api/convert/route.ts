@@ -28,10 +28,16 @@ export async function POST(request: NextRequest) {
       const snapshot = await adminDb
         .collection("conversions")
         .where("userId", "==", userId)
-        .where("createdAt", ">=", today)
         .get();
 
-      if (snapshot.size >= 10) {
+      const todayConversions = snapshot.docs.filter((doc) => {
+        const data = doc.data();
+        if (!data.createdAt) return false;
+        const date = data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+        return date >= today;
+      });
+
+      if (todayConversions.length >= 10) {
         return NextResponse.json(
           {
             success: false,
@@ -94,3 +100,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

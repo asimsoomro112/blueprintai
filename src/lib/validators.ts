@@ -16,3 +16,4 @@ export const ConversionRequestSchema = z.object({
   outputMode: z.enum(["react-tailwind", "html-css"]),
   userPreferences: z.string().optional(),
 });
+

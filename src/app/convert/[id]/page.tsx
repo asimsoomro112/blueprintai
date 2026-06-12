@@ -8,10 +8,26 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import {
-  Code, FileCode, Copy, Download, RefreshCw, Trash2,
-  Image as ImageIcon, Eye, Loader2, ArrowLeft, Sparkles,
-  CheckCircle2, AlertTriangle, Layers, Save, MessageSquare,
-  Send, PencilLine
+  Code,
+  FileCode,
+  Copy,
+  RefreshCw,
+  Image as ImageIcon,
+  Eye,
+  Loader2,
+  ArrowLeft,
+  AlertTriangle,
+  Layers,
+  Save,
+  MessageSquare,
+  Send,
+  PencilLine,
+  TerminalSquare,
+  Gauge,
+  Clock3,
+  FileArchive,
+  PanelLeft,
+  Maximize2,
 } from "lucide-react";
 import type { ConversionRecord } from "@/types";
 import { isFirebaseConfigured, db } from "@/lib/firebase/client";
@@ -202,10 +218,44 @@ const SandpackPreview = dynamic(
       generatedFiles?: Record<string, string>;
     }) {
       if (mode === "html-css") {
+        let injectedHtml = code;
+
+        // Inject Tailwind CDN
+        if (!injectedHtml.includes("cdn.tailwindcss.com")) {
+          const tailwindScript = '<script src="https://cdn.tailwindcss.com"></script>';
+          if (injectedHtml.includes("</head>")) {
+            injectedHtml = injectedHtml.replace("</head>", `${tailwindScript}\n</head>`);
+          } else {
+            injectedHtml = `${tailwindScript}\n${injectedHtml}`;
+          }
+        }
+
+        // Inject generated custom CSS
+        const customCss = generatedFiles?.["styles.css"];
+        if (customCss) {
+          const styleTag = `<style>\n${customCss}\n</style>`;
+          if (injectedHtml.includes("</head>")) {
+            injectedHtml = injectedHtml.replace("</head>", `${styleTag}\n</head>`);
+          } else {
+            injectedHtml = `${injectedHtml}\n${styleTag}`;
+          }
+        }
+
+        // Inject generated custom JS
+        const customJs = generatedFiles?.["script.js"];
+        if (customJs) {
+          const scriptTag = `<script>\n${customJs}\n</script>`;
+          if (injectedHtml.includes("</body>")) {
+            injectedHtml = injectedHtml.replace("</body>", `${scriptTag}\n</body>`);
+          } else {
+            injectedHtml = `${injectedHtml}\n${scriptTag}`;
+          }
+        }
+
         return (
           <div className="w-full h-full bg-white rounded-xl overflow-hidden">
             <iframe
-              srcDoc={code}
+              srcDoc={injectedHtml}
               className="w-full h-full border-0"
               sandbox="allow-scripts"
               title="HTML Preview"
@@ -257,6 +307,16 @@ const SandpackPreview = dynamic(
   { ssr: false, loading: () => <div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin text-blue-400" /></div> }
 );
 
+
+function normalizeDate(value: any) {
+  if (!value) return null;
+  try {
+    return value.toDate ? value.toDate() : new Date(value);
+  } catch {
+    return null;
+  }
+}
+
 function WorkbenchContent() {
   const { user, isDemo } = useAuth();
   const params = useParams();
@@ -277,7 +337,7 @@ function WorkbenchContent() {
   const [aiMessages, setAiMessages] = useState<AiChatMessage[]>([
     {
       role: "assistant",
-      content: "What would you like changed in this website?",
+      content: "Tell me what to improve: layout, colors, spacing, responsiveness, sections, or copy.",
     },
   ]);
 
@@ -285,7 +345,6 @@ function WorkbenchContent() {
     async function load() {
       if (!conversionId || !user) return;
 
-      // Try demo/local storage first
       if (isDemo || !isFirebaseConfigured() || conversionId.startsWith("local-")) {
         const individualCached = localStorage.getItem(`blueprint_conversion_${conversionId}`);
         if (individualCached) {
@@ -298,14 +357,13 @@ function WorkbenchContent() {
             setActiveTab(found.outputMode === "html-css" ? "html" : "react");
             setLoading(false);
             return;
-          } catch (e) {
-            console.error("Error parsing cached individual conversion:", e);
+          } catch (error) {
+            console.error("Error parsing cached individual conversion:", error);
           }
         }
 
-        // Fallback/Migration path
         const cached = getCleanedConversions();
-        const found = cached.find((c: ConversionRecord) => c.id === conversionId);
+        const found = cached.find((item: ConversionRecord) => item.id === conversionId);
         if (found) {
           setConversion(found);
           setCode(found.generatedReactCode || "");
@@ -314,8 +372,8 @@ function WorkbenchContent() {
           setActiveTab(found.outputMode === "html-css" ? "html" : "react");
           try {
             safeSetLocalStorage(`blueprint_conversion_${conversionId}`, JSON.stringify(found));
-          } catch (e) {
-            console.error("Failed to migrate legacy stored conversion:", e);
+          } catch (error) {
+            console.error("Failed to migrate legacy stored conversion:", error);
           }
         }
         setLoading(false);
@@ -332,18 +390,21 @@ function WorkbenchContent() {
           setCssCode(data.generatedCssCode || "");
           setActiveTab(data.outputMode === "html-css" ? "html" : "react");
         }
-      } catch (err) {
-        console.error("Error loading conversion:", err);
+      } catch (error) {
+        console.error("Error loading conversion:", error);
+        toast.error("Could not load this workspace.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
+
     load();
   }, [conversionId, user, isDemo]);
 
   const handleCopy = useCallback(() => {
     const textToCopy = activeTab === "react" ? code : `${htmlCode}\n\n/* CSS */\n${cssCode}`;
     navigator.clipboard.writeText(textToCopy);
-    toast.success("Code copied to clipboard!");
+    toast.success("Code copied to clipboard.");
   }, [activeTab, code, htmlCode, cssCode]);
 
   const handleExport = useCallback(async () => {
@@ -361,135 +422,34 @@ function WorkbenchContent() {
         }
       );
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(conversion.title || "export").replace(/[^a-z0-9]/gi, "-")}.zip`;
-      a.click();
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(conversion.title || "export").replace(/[^a-z0-9]/gi, "-")}.zip`;
+      anchor.click();
       URL.revokeObjectURL(url);
-      toast.success("ZIP exported successfully!");
+      toast.success("ZIP exported successfully.");
     } catch (err: any) {
       toast.error(err.message || "Export failed");
     }
   }, [activeTab, code, htmlCode, cssCode, conversion]);
 
-  const persistConversionUpdates = useCallback(async (
-    updates: Partial<ConversionRecord>,
-    successMessage?: string
-  ) => {
-    if (!conversion) {
-      throw new Error("Conversion is not loaded yet");
-    }
-
-    const isLocal = isDemo || !isFirebaseConfigured() || conversion.id.startsWith("local-");
-    const updatedAt = new Date();
-    const fullRecord: ConversionRecord = {
-      ...conversion,
-      ...updates,
-      updatedAt: isLocal ? updatedAt.toISOString() : updatedAt,
-    };
-
-    if (isLocal) {
-      const cached = getCleanedConversions();
-      const index = cached.findIndex((c: ConversionRecord) => c.id === conversion.id);
-      const lightweight = {
-        id: fullRecord.id,
-        title: fullRecord.title,
-        outputMode: fullRecord.outputMode,
-        createdAt: fullRecord.createdAt,
-        status: fullRecord.status,
-        cloudinaryUrl: fullRecord.cloudinaryUrl || fullRecord.cloudinaryPublicId,
-        updatedAt: fullRecord.updatedAt,
-      };
-
-      if (index !== -1) {
-        cached[index] = lightweight;
-      } else {
-        cached.unshift(lightweight);
+  const persistConversionUpdates = useCallback(
+    async (updates: Partial<ConversionRecord>, successMessage?: string) => {
+      if (!conversion) {
+        throw new Error("Conversion is not loaded yet");
       }
 
-      safeSetLocalStorage("blueprint_conversions", JSON.stringify(cached));
-      safeSetLocalStorage(`blueprint_conversion_${conversion.id}`, JSON.stringify(fullRecord));
-    } else {
-      await updateDoc(doc(db, "conversions", conversion.id), {
+      const isLocal = isDemo || !isFirebaseConfigured() || conversion.id.startsWith("local-");
+      const updatedAt = new Date();
+      const fullRecord: ConversionRecord = {
+        ...conversion,
         ...updates,
-        updatedAt,
-      });
-    }
+        updatedAt: isLocal ? updatedAt.toISOString() : updatedAt,
+      };
 
-    setConversion(fullRecord);
-    if (successMessage) {
-      toast.success(successMessage);
-    }
-
-    return fullRecord;
-  }, [conversion, isDemo]);
-
-  const handleSave = async () => {
-    if (!conversion) return;
-    setSaving(true);
-    try {
-      await persistConversionUpdates({
-        generatedReactCode: code,
-        generatedHtmlCode: htmlCode,
-        generatedCssCode: cssCode,
-        generatedJsCode: conversion.generatedJsCode || "",
-        generatedFiles: conversion.generatedFiles || {},
-      }, "Edits saved in this workspace.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save changes");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRegenerate = async () => {
-    if (!conversion) return;
-    setRegenerating(true);
-    try {
-      const res = await fetch("/api/regenerate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversionId: conversion.id,
-          imageUrl: conversion.cloudinaryUrl,
-          imageBase64: conversion.cloudinaryUrl,
-          outputMode: activeTab === "react" ? "react-tailwind" : "html-css",
-          userId: user?.uid,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      const newReactCode = data.data.generatedReactCode || code;
-      const newHtmlCode = data.data.generatedHtmlCode || htmlCode;
-      const newCssCode = data.data.generatedCssCode || cssCode;
-
-      setCode(newReactCode);
-      setHtmlCode(newHtmlCode);
-      setCssCode(newCssCode);
-
-      // Save to localStorage for demo mode or local fallback
-      if (isDemo || conversion.id.startsWith("local-")) {
+      if (isLocal) {
         const cached = getCleanedConversions();
-        const index = cached.findIndex((c: ConversionRecord) => c.id === conversion.id);
-        
-        const individualCached = localStorage.getItem(`blueprint_conversion_${conversion.id}`);
-        const prevFull = individualCached ? JSON.parse(individualCached) : conversion;
-
-        const fullRecord: ConversionRecord = {
-          ...prevFull,
-          title: data.data.title || prevFull.title,
-          detectedComponents: data.data.detectedComponents || prevFull.detectedComponents,
-          layoutDescription: data.data.layoutDescription || prevFull.layoutDescription,
-          generatedReactCode: newReactCode,
-          generatedHtmlCode: newHtmlCode,
-          generatedCssCode: newCssCode,
-          generatedFiles: data.data.generatedFiles || prevFull.generatedFiles || {},
-          confidenceScore: data.data.confidenceScore || prevFull.confidenceScore,
-          warnings: data.data.warnings || prevFull.warnings,
-          updatedAt: new Date().toISOString(),
-        };
-
+        const index = cached.findIndex((item: ConversionRecord) => item.id === conversion.id);
         const lightweight = {
           id: fullRecord.id,
           title: fullRecord.title,
@@ -502,30 +462,112 @@ function WorkbenchContent() {
 
         if (index !== -1) {
           cached[index] = lightweight;
-          safeSetLocalStorage("blueprint_conversions", JSON.stringify(cached));
         } else {
           cached.unshift(lightweight);
-          safeSetLocalStorage("blueprint_conversions", JSON.stringify(cached));
         }
 
+        safeSetLocalStorage("blueprint_conversions", JSON.stringify(cached));
         safeSetLocalStorage(`blueprint_conversion_${conversion.id}`, JSON.stringify(fullRecord));
-        setConversion(fullRecord);
       } else {
-        setConversion(prev => prev ? {
-          ...prev,
-          title: data.data.title || prev.title,
-          detectedComponents: data.data.detectedComponents || prev.detectedComponents,
-          layoutDescription: data.data.layoutDescription || prev.layoutDescription,
-          generatedReactCode: newReactCode,
-          generatedHtmlCode: newHtmlCode,
-          generatedCssCode: newCssCode,
-          generatedFiles: data.data.generatedFiles || prev.generatedFiles || {},
-          confidenceScore: data.data.confidenceScore || prev.confidenceScore,
-          warnings: data.data.warnings || prev.warnings,
-          updatedAt: new Date(),
-        } : null);
+        await updateDoc(doc(db, "conversions", conversion.id), {
+          ...updates,
+          updatedAt,
+        });
       }
-      toast.success("Code regenerated!");
+
+      setConversion(fullRecord);
+      if (successMessage) toast.success(successMessage);
+
+      return fullRecord;
+    },
+    [conversion, isDemo]
+  );
+
+  const handleSave = async () => {
+    if (!conversion) return;
+    setSaving(true);
+    try {
+      await persistConversionUpdates(
+        {
+          generatedReactCode: code,
+          generatedHtmlCode: htmlCode,
+          generatedCssCode: cssCode,
+          generatedJsCode: conversion.generatedJsCode || "",
+          generatedFiles: conversion.generatedFiles || {},
+        },
+        "Manual edits saved."
+      );
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!conversion) return;
+    setRegenerating(true);
+
+    try {
+      const res = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversionId: conversion.id,
+          imageUrl: conversion.cloudinaryUrl,
+          imageBase64: conversion.cloudinaryUrl,
+          outputMode: activeTab === "react" ? "react-tailwind" : "html-css",
+          userId: user?.uid,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      const newReactCode = data.data.generatedReactCode || code;
+      const newHtmlCode = data.data.generatedHtmlCode || htmlCode;
+      const newCssCode = data.data.generatedCssCode || cssCode;
+
+      setCode(newReactCode);
+      setHtmlCode(newHtmlCode);
+      setCssCode(newCssCode);
+
+      const fullRecord: ConversionRecord = {
+        ...conversion,
+        title: data.data.title || conversion.title,
+        detectedComponents: data.data.detectedComponents || conversion.detectedComponents,
+        layoutDescription: data.data.layoutDescription || conversion.layoutDescription,
+        generatedReactCode: newReactCode,
+        generatedHtmlCode: newHtmlCode,
+        generatedCssCode: newCssCode,
+        generatedFiles: data.data.generatedFiles || conversion.generatedFiles || {},
+        confidenceScore: data.data.confidenceScore || conversion.confidenceScore,
+        warnings: data.data.warnings || conversion.warnings,
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (isDemo || conversion.id.startsWith("local-")) {
+        const cached = getCleanedConversions();
+        const index = cached.findIndex((item: ConversionRecord) => item.id === conversion.id);
+        const lightweight = {
+          id: fullRecord.id,
+          title: fullRecord.title,
+          outputMode: fullRecord.outputMode,
+          createdAt: fullRecord.createdAt,
+          status: fullRecord.status,
+          cloudinaryUrl: fullRecord.cloudinaryUrl || fullRecord.cloudinaryPublicId,
+          updatedAt: fullRecord.updatedAt,
+        };
+
+        if (index !== -1) cached[index] = lightweight;
+        else cached.unshift(lightweight);
+
+        safeSetLocalStorage("blueprint_conversions", JSON.stringify(cached));
+        safeSetLocalStorage(`blueprint_conversion_${conversion.id}`, JSON.stringify(fullRecord));
+      }
+
+      setConversion(fullRecord);
+      toast.success("Code regenerated.");
     } catch (err: any) {
       toast.error(err.message || "Regeneration failed");
     } finally {
@@ -547,7 +589,7 @@ function WorkbenchContent() {
     setAiMessages((messages) => [
       ...messages,
       { role: "user", content: instruction },
-      { role: "assistant", content: "Working on it..." },
+      { role: "assistant", content: "Applying the change and refreshing the preview..." },
     ]);
 
     try {
@@ -593,10 +635,10 @@ function WorkbenchContent() {
         ...messages.slice(0, -1),
         {
           role: "assistant",
-          content: data.data.summary || "Done. I updated the website and refreshed the preview.",
+          content: data.data.summary || "Done. The website was updated and the preview was refreshed.",
         },
       ]);
-      toast.success("AI changes applied to the preview.");
+      toast.success("AI changes applied.");
     } catch (err: any) {
       setAiMessages((messages) => [
         ...messages.slice(0, -1),
@@ -613,10 +655,10 @@ function WorkbenchContent() {
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-          <span className="text-sm text-gray-400">Loading conversion...</span>
+      <div className="grid min-h-[calc(100vh-76px)] place-items-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-9 w-9 animate-spin text-blue-300" />
+          <p className="mt-4 text-sm font-bold text-slate-400">Loading premium workbench...</p>
         </div>
       </div>
     );
@@ -624,13 +666,14 @@ function WorkbenchContent() {
 
   if (!conversion) {
     return (
-      <div className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-        <div className="text-center">
-          <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-white">Conversion not found</h2>
-          <p className="text-sm text-gray-400 mt-2">This conversion may have been deleted.</p>
-          <button onClick={() => router.push("/dashboard")} className="mt-4 px-5 py-2 text-sm font-medium text-blue-400 hover:text-blue-300">
-            ← Back to Dashboard
+      <div className="grid min-h-[calc(100vh-76px)] place-items-center px-4">
+        <div className="premium-card max-w-md p-8 text-center">
+          <AlertTriangle className="mx-auto h-11 w-11 text-amber-300" />
+          <h2 className="mt-5 text-2xl font-black text-white">Conversion not found</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">This workspace may have been deleted or is stored in another browser profile.</p>
+          <button onClick={() => router.push("/dashboard")} className="btn-secondary mt-6 px-5 py-3 text-sm">
+            <ArrowLeft className="h-4 w-4" />
+            Back to dashboard
           </button>
         </div>
       </div>
@@ -638,263 +681,356 @@ function WorkbenchContent() {
   }
 
   const currentEditorCode = activeTab === "react" ? code : `${htmlCode}\n\n/* CSS */\n${cssCode}`;
-  const previewCode = activeTab === "react"
-    ? code
-    : `<!DOCTYPE html><html><head><style>${cssCode}</style></head><body>${htmlCode.replace(/<link[^>]*>/g, "").replace(/<script[^>]*><\/script>/g, "")}</body><script>${conversion.generatedJsCode || ""}</script></html>`;
+  const previewCode =
+    activeTab === "react"
+      ? code
+      : `<!DOCTYPE html><html><head><style>${cssCode}</style></head><body>${htmlCode
+        .replace(/<link[^>]*>/g, "")
+        .replace(/<script[^>]*><\/script>/g, "")}</body><script>${conversion.generatedJsCode || ""}</script></html>`;
+  const createdDate = normalizeDate(conversion.createdAt);
+  const confidence = conversion.confidenceScore ? Math.round(conversion.confidenceScore * 100) : 0;
+  const componentCount = conversion.detectedComponents?.length || 0;
+  const generatedFileCount = Object.keys(conversion.generatedFiles || {}).length + 1;
 
   return (
-    <div className="h-[calc(100vh-60px)] flex flex-col">
-      {/* Toolbar */}
-      <div className="flex-shrink-0 border-b border-gray-800/60 bg-[#030712]/90 backdrop-blur-sm px-4 py-2.5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => router.push("/dashboard")} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all flex-shrink-0">
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-200 truncate">{conversion.title}</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> {conversion.detectedComponents?.length || 0} components</span>
-                {conversion.confidenceScore > 0 && (
-                  <span className="flex items-center gap-1"><Sparkles className="h-3 w-3" /> {(conversion.confidenceScore * 100).toFixed(0)}% confidence</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* Tab switcher */}
-            <div className="flex bg-gray-800/50 rounded-lg p-0.5">
+    <div className="premium-shell h-[calc(100vh-76px)] min-h-[720px] overflow-hidden">
+      <div className="flex h-full flex-col">
+        <div className="flex-shrink-0 border-b border-white/[0.08] bg-[#040915]/78 px-3 py-3 shadow-[0_16px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:px-5">
+          <div className="mx-auto flex max-w-[1800px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
               <button
-                onClick={() => setActiveTab("react")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  activeTab === "react" ? "bg-blue-500/15 text-blue-400" : "text-gray-400 hover:text-gray-200"
-                }`}
+                onClick={() => router.push("/dashboard")}
+                className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.045] text-slate-400 transition-all hover:bg-white/[0.08] hover:text-white"
+                title="Back to dashboard"
               >
-                <Code className="h-3.5 w-3.5" /> React
+                <ArrowLeft className="h-4 w-4" />
               </button>
-              <button
-                onClick={() => setActiveTab("html")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  activeTab === "html" ? "bg-cyan-500/15 text-cyan-400" : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                <FileCode className="h-3.5 w-3.5" /> HTML/CSS
-              </button>
-            </div>
 
-            {/* Actions */}
-            <button
-              onClick={() => setShowCodeEditor((visible) => !visible)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                showCodeEditor
-                  ? "bg-blue-500/15 text-blue-300 border border-blue-500/20"
-                  : "text-gray-300 hover:text-white hover:bg-white/5 border border-white/10"
-              }`}
-              title={showCodeEditor ? "Hide code editor" : "Edit generated code"}
-            >
-              <PencilLine className="h-4 w-4" />
-              {showCodeEditor ? "Hide Code" : "Edit Code"}
-            </button>
-            {showCodeEditor && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-emerald-300 border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/15 transition-all disabled:opacity-50"
-                title="Save code edits in this workspace"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Save Edits
-              </button>
-            )}
-            <button onClick={handleCopy} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all" title="Copy code">
-              <Copy className="h-4 w-4" />
-            </button>
-            <button onClick={handleExport} className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all" title="Export ZIP">
-              <Download className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-50"
-              title="Regenerate from original sketch"
-            >
-              <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main workspace split view */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-        {/* Left: Original image */}
-        <div className="w-full lg:w-[22%] min-h-[300px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 bg-[#0a0f1e] lg:flex-shrink-0 overflow-auto">
-          <div className="p-3">
-            <div className="flex items-center gap-2 mb-3 px-1">
-              <ImageIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Original Sketch</span>
-            </div>
-            {conversion.cloudinaryUrl ? (
-              <img
-                src={conversion.cloudinaryUrl}
-                alt="Original sketch"
-                className="w-full rounded-lg border border-gray-700/40"
-              />
-            ) : (
-              <div className="w-full aspect-[4/3] bg-gray-800/40 rounded-lg border border-gray-700/40 flex items-center justify-center">
-                <ImageIcon className="h-8 w-8 text-gray-600" />
-              </div>
-            )}
-
-            {/* Detected components */}
-            {conversion.detectedComponents && conversion.detectedComponents.length > 0 && (
-              <div className="mt-4">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider px-1">Detected</span>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {conversion.detectedComponents.map((c, i) => (
-                    <span key={i} className="px-2 py-1 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-md">
-                      {c.label || c.type}
-                    </span>
-                  ))}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-sm font-black text-white sm:text-base">{conversion.title || "Untitled Conversion"}</h1>
+                  <span className="rounded-full border border-emerald-300/18 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-200">
+                    {conversion.status || "completed"}
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="h-3.5 w-3.5" />
+                    {componentCount} detected modules
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Gauge className="h-3.5 w-3.5" />
+                    {confidence}% confidence
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {createdDate ? createdDate.toLocaleDateString() : "recent"}
+                  </span>
                 </div>
               </div>
-            )}
+            </div>
 
-            {conversion.warnings && conversion.warnings.length > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <span className="text-xs font-medium text-amber-400 flex items-center gap-1 mb-1"><AlertTriangle className="h-3 w-3" /> Warnings</span>
-                {conversion.warnings.map((w, i) => (
-                  <p key={i} className="text-xs text-amber-300/70 mt-1">{w}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1">
+                <button
+                  onClick={() => setActiveTab("react")}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all ${activeTab === "react" ? "bg-blue-400/14 text-blue-200" : "text-slate-500 hover:text-slate-200"
+                    }`}
+                >
+                  <Code className="h-3.5 w-3.5" />
+                  React
+                </button>
+                <button
+                  onClick={() => setActiveTab("html")}
+                  className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all ${activeTab === "html" ? "bg-cyan-400/14 text-cyan-200" : "text-slate-500 hover:text-slate-200"
+                    }`}
+                >
+                  <FileCode className="h-3.5 w-3.5" />
+                  HTML/CSS
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowCodeEditor((visible) => !visible)}
+                className={`btn-secondary px-3 py-2 text-xs ${showCodeEditor ? "border-blue-300/20 bg-blue-400/10 text-blue-200" : ""}`}
+                title={showCodeEditor ? "Hide code editor" : "Show code editor"}
+              >
+                <PencilLine className="h-4 w-4" />
+                {showCodeEditor ? "Hide code" : "Edit code"}
+              </button>
+
+              {showCodeEditor && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="btn-secondary border-emerald-300/18 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-200 disabled:opacity-50"
+                  title="Save code edits"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save
+                </button>
+              )}
+
+              <button onClick={handleCopy} className="btn-secondary px-3 py-2 text-xs" title="Copy code">
+                <Copy className="h-4 w-4" />
+                Copy
+              </button>
+              <button onClick={handleExport} className="btn-secondary px-3 py-2 text-xs" title="Export ZIP">
+                <FileArchive className="h-4 w-4" />
+                Export
+              </button>
+              <button
+                onClick={handleRegenerate}
+                disabled={regenerating}
+                className="btn-primary px-3 py-2 text-xs disabled:opacity-50"
+                title="Regenerate from original sketch"
+              >
+                <RefreshCw className={`h-4 w-4 ${regenerating ? "animate-spin" : ""}`} />
+                Regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto flex min-h-0 w-full max-w-[1800px] flex-1 flex-col gap-3 overflow-y-auto p-3 lg:flex-row lg:overflow-hidden">
+          <aside className="premium-card flex min-h-[360px] w-full flex-col overflow-hidden lg:min-h-0 lg:w-[300px] xl:w-[340px]">
+            <div className="border-b border-white/[0.08] p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-400/10 text-blue-200">
+                  <ImageIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white">Original sketch</p>
+                  <p className="text-xs text-slate-500">Source image and AI detection</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              {conversion.cloudinaryUrl ? (
+                <img
+                  src={conversion.cloudinaryUrl}
+                  alt="Original sketch"
+                  className="w-full rounded-2xl border border-white/[0.08] bg-black/20"
+                />
+              ) : (
+                <div className="grid aspect-[4/3] w-full place-items-center rounded-2xl border border-white/[0.08] bg-white/[0.035]">
+                  <ImageIcon className="h-8 w-8 text-slate-600" />
+                </div>
+              )}
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {[
+                  { label: "Mode", value: activeTab === "react" ? "React" : "HTML" },
+                  { label: "Files", value: generatedFileCount },
+                  { label: "Confidence", value: `${confidence}%` },
+                  { label: "Modules", value: componentCount },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-600">{item.label}</p>
+                    <p className="mt-1 text-sm font-black text-white">{item.value}</p>
+                  </div>
                 ))}
               </div>
-            )}
 
-            <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-3">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4 text-blue-300" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-blue-200">AI Changes</span>
+              {conversion.detectedComponents && conversion.detectedComponents.length > 0 && (
+                <div className="mt-5">
+                  <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Detected modules</p>
+                  <div className="flex flex-wrap gap-2">
+                    {conversion.detectedComponents.map((component, index) => (
+                      <span key={`${component.label}-${index}`} className="rounded-full border border-blue-300/16 bg-blue-400/10 px-3 py-1 text-xs font-bold text-blue-200">
+                        {component.label || component.type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {conversion.layoutDescription && (
+                <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
+                  <p className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                    <PanelLeft className="h-3.5 w-3.5" />
+                    Layout summary
+                  </p>
+                  <p className="text-xs leading-6 text-slate-400">{conversion.layoutDescription}</p>
+                </div>
+              )}
+
+              {conversion.warnings && conversion.warnings.length > 0 && (
+                <div className="mt-5 rounded-2xl border border-amber-300/18 bg-amber-400/10 p-4">
+                  <p className="mb-2 flex items-center gap-2 text-xs font-black text-amber-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    Warnings
+                  </p>
+                  {conversion.warnings.map((warning, index) => (
+                    <p key={index} className="mt-1 text-xs leading-5 text-amber-100/75">
+                      {warning}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {showCodeEditor && (
+            <section className="premium-card flex min-h-[420px] w-full flex-col overflow-hidden lg:min-h-0 lg:w-[38%]">
+              <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <TerminalSquare className="h-4 w-4 text-cyan-200" />
+                  <span className="font-mono text-xs font-black text-slate-300">
+                    {activeTab === "react" ? "App.tsx" : "index.html + styles.css"}
+                  </span>
+                </div>
+                <span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Monaco
+                </span>
               </div>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <MonacoEditor
+                  height="100%"
+                  language={activeTab === "react" ? "typescript" : "html"}
+                  theme="vs-dark"
+                  value={currentEditorCode}
+                  onChange={(val) => {
+                    if (activeTab === "react") {
+                      setCode(val || "");
+                    } else {
+                      const cleanVal = val || "";
+                      const match = cleanVal.match(/\/\*\s*CSS\s*\*\//i);
+                      if (match && match.index !== undefined) {
+                        const separator = match[0];
+                        const index = match.index;
+                        setHtmlCode(cleanVal.substring(0, index).trim());
+                        setCssCode(cleanVal.substring(index + separator.length).trim());
+                      } else {
+                        setHtmlCode(cleanVal);
+                      }
+                    }
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    lineHeight: 21,
+                    scrollBeyondLastLine: false,
+                    padding: { top: 14 },
+                    wordWrap: "on",
+                    tabSize: 2,
+                    renderLineHighlight: "line",
+                    automaticLayout: true,
+                    smoothScrolling: true,
+                  }}
+                />
+              </div>
+            </section>
+          )}
 
-              <div className="mt-3 max-h-48 space-y-2 overflow-auto pr-1">
+          <section className="premium-card flex min-h-[520px] min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
+            <div className="flex flex-col gap-3 border-b border-white/[0.08] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-200">
+                  <Eye className="h-4.5 w-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-white">Live preview</p>
+                  <p className="truncate text-xs text-slate-500">Rendered output updates when code changes</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-wider ${activeTab === "react" ? "border-blue-300/18 bg-blue-400/10 text-blue-200" : "border-cyan-300/18 bg-cyan-400/10 text-cyan-200"
+                  }`}>
+                  {activeTab === "react" ? "React sandbox" : "HTML iframe"}
+                </span>
+                <button
+                  onClick={() => setShowCodeEditor(true)}
+                  className="grid h-8 w-8 place-items-center rounded-full border border-white/[0.08] bg-white/[0.045] text-slate-400 hover:text-white"
+                  title="Show editor"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 bg-white">
+              <SandpackPreview
+                code={previewCode}
+                mode={activeTab === "react" ? "react" : "html-css"}
+                generatedFiles={conversion.generatedFiles || {}}
+              />
+            </div>
+          </section>
+
+          <aside className="premium-card flex min-h-[420px] w-full flex-col overflow-hidden lg:min-h-0 lg:w-[330px] xl:w-[360px]">
+            <div className="border-b border-white/[0.08] p-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-400/10 text-violet-200">
+                  <MessageSquare className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white">AI refinement</p>
+                  <p className="text-xs text-slate-500">Ask for targeted UI/code edits</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-4">
+              <div className="space-y-3">
                 {aiMessages.map((message, index) => (
                   <div
                     key={`${message.role}-${index}`}
-                    className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                      message.role === "user"
-                        ? "ml-4 bg-blue-500/15 text-blue-50"
-                        : "mr-4 bg-white/[0.04] text-gray-300"
-                    }`}
+                    className={`rounded-2xl px-4 py-3 text-xs leading-6 ${message.role === "user"
+                      ? "ml-7 border border-blue-300/14 bg-blue-400/10 text-blue-50"
+                      : "mr-7 border border-white/[0.07] bg-white/[0.045] text-slate-300"
+                      }`}
                   >
+                    <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      {message.role === "user" ? "You" : "BlueprintAI"}
+                    </p>
                     {message.content}
                   </div>
                 ))}
               </div>
 
-              <form
-                className="mt-3 space-y-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  handleAiRefine();
-                }}
+              <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.035] p-4">
+                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">Prompt ideas</p>
+                {[
+                  "Make the design more premium with better spacing.",
+                  "Convert this into a responsive landing page.",
+                  "Improve colors, typography and card hierarchy.",
+                ].map((idea) => (
+                  <button
+                    key={idea}
+                    onClick={() => setAiInstruction(idea)}
+                    className="mb-2 w-full rounded-xl border border-white/[0.07] bg-white/[0.035] px-3 py-2 text-left text-xs font-semibold text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                  >
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form
+              className="border-t border-white/[0.08] p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleAiRefine();
+              }}
+            >
+              <textarea
+                value={aiInstruction}
+                onChange={(event) => setAiInstruction(event.target.value)}
+                disabled={aiEditing}
+                placeholder="Example: make hero more modern, improve mobile layout, add cards..."
+                className="min-h-28 w-full resize-none rounded-2xl border border-white/[0.09] bg-white/[0.045] px-4 py-3 text-xs leading-6 text-slate-100 outline-none placeholder:text-slate-600"
+              />
+              <button
+                type="submit"
+                disabled={aiEditing || !aiInstruction.trim()}
+                className="btn-primary mt-3 w-full px-4 py-3 text-xs disabled:opacity-50"
               >
-                <textarea
-                  value={aiInstruction}
-                  onChange={(event) => setAiInstruction(event.target.value)}
-                  disabled={aiEditing}
-                  placeholder="Ask for a change..."
-                  className="min-h-20 w-full resize-none rounded-lg border border-white/10 bg-[#050914] px-3 py-2 text-xs text-gray-100 outline-none placeholder:text-gray-500 focus:border-blue-400/50"
-                />
-                <button
-                  type="submit"
-                  disabled={aiEditing || !aiInstruction.trim()}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-3 py-2 text-xs font-semibold text-white transition-all hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {aiEditing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                  Apply AI Change
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Code editor */}
-        {showCodeEditor && (
-        <div className="w-full lg:w-[36%] min-h-[400px] lg:min-h-0 border-b lg:border-b-0 lg:border-r border-gray-800/60 flex flex-col overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-800/60 bg-[#0d1117]">
-            <Code className="h-4 w-4 text-gray-400" />
-            <span className="text-xs font-medium text-gray-400">
-              {activeTab === "react" ? "App.tsx" : "index.html + styles.css"}
-            </span>
-          </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <MonacoEditor
-              height="100%"
-              language={activeTab === "react" ? "typescript" : "html"}
-              theme="vs-dark"
-              value={currentEditorCode}
-              onChange={(val) => {
-                if (activeTab === "react") {
-                  setCode(val || "");
-                } else {
-                  // Robust split for HTML and CSS sections
-                  const cleanVal = val || "";
-                  const match = cleanVal.match(/\/\*\s*CSS\s*\*\//i);
-                  if (match && match.index !== undefined) {
-                    const separator = match[0];
-                    const index = match.index;
-                    setHtmlCode(cleanVal.substring(0, index).trim());
-                    setCssCode(cleanVal.substring(index + separator.length).trim());
-                  } else {
-                    setHtmlCode(cleanVal);
-                  }
-                }
-              }}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                lineHeight: 20,
-                scrollBeyondLastLine: false,
-                padding: { top: 12 },
-                wordWrap: "on",
-                tabSize: 2,
-                renderLineHighlight: "line",
-                automaticLayout: true,
-              }}
-            />
-          </div>
-        </div>
-        )}
-
-        {/* Right: Live preview */}
-        <div className="w-full min-w-0 flex-1 min-h-[500px] lg:min-h-0 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-800/60 bg-[#0d1117]">
-            <div className="flex items-center gap-2 min-w-0">
-              <Eye className="h-4 w-4 text-gray-400" />
-              <span className="text-xs font-medium text-gray-400">Live Preview</span>
-            </div>
-            <span className={`flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-              activeTab === "react"
-                ? "border-blue-500/25 bg-blue-500/10 text-blue-300"
-                : "border-cyan-500/25 bg-cyan-500/10 text-cyan-300"
-            }`}>
-              {activeTab === "react" ? "React App.tsx" : "HTML/CSS"}
-            </span>
-          </div>
-          <div className="flex-1 min-h-0 overflow-hidden bg-white">
-            <SandpackPreview
-              code={previewCode}
-              mode={activeTab === "react" ? "react" : "html-css"}
-              generatedFiles={conversion.generatedFiles || {}}
-            />
-          </div>
+                {aiEditing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Apply AI change
+              </button>
+            </form>
+          </aside>
         </div>
       </div>
     </div>

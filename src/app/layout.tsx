@@ -1,12 +1,41 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthContext";
 import Navbar from "@/components/layout/Navbar";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "BlueprintAI — Sketch to Web Code Converter",
-  description: "Turn hand-drawn wireframes into production-ready React and HTML/CSS code using AI vision technology.",
+  metadataBase: new URL("https://blueprintai.local"),
+  title: {
+    default: "BlueprintAI — Premium Sketch to Code Studio",
+    template: "%s — BlueprintAI",
+  },
+  description:
+    "Turn hand-drawn wireframes into polished React + Tailwind or HTML/CSS websites with Gemini vision, live preview, Monaco editing, and ZIP export.",
+  keywords: [
+    "AI sketch to code",
+    "Next.js",
+    "React",
+    "Tailwind CSS",
+    "Gemini Vision",
+    "wireframe converter",
+    "student web engineering project",
+  ],
+  authors: [{ name: "BlueprintAI" }],
+  openGraph: {
+    title: "BlueprintAI — Premium Sketch to Code Studio",
+    description:
+      "Upload a wireframe, generate frontend code, refine with AI, preview live, and export a complete project.",
+    type: "website",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#02040a",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -17,33 +46,29 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased min-h-screen bg-[#030712] relative">
-        {/* Subtle dot grid overlay */}
-        <div
-          className="fixed inset-0 pointer-events-none z-0"
-          style={{
-            backgroundImage: "radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
-          }}
-        />
+      <body className="antialiased">
         <AuthProvider>
-          <Navbar />
-          <main className="relative z-10">{children}</main>
+          <div className="relative z-10 min-h-screen">
+            <Navbar />
+            <main className="relative z-10">{children}</main>
+          </div>
           <Toaster
             position="top-right"
             toastOptions={{
               style: {
-                background: "rgba(15, 23, 42, 0.85)",
-                backdropFilter: "blur(16px)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                color: "#f1f5f9",
+                background: "rgba(8, 17, 31, 0.88)",
+                backdropFilter: "blur(18px)",
+                border: "1px solid rgba(255, 255, 255, 0.10)",
+                color: "#eef5ff",
                 borderRadius: "1rem",
-                boxShadow: "0 8px 30px rgba(0, 0, 0, 0.3)",
+                boxShadow: "0 20px 70px rgba(0, 0, 0, 0.38)",
               },
             }}
           />

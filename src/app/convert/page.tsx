@@ -8,8 +8,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { compressImage, getCleanedConversions, safeSetLocalStorage } from "@/lib/utils";
 import {
-  Upload, Image as ImageIcon, X, Sparkles, Code, FileCode,
-  Loader2, CheckCircle2, AlertCircle
+  Upload,
+  Image as ImageIcon,
+  X,
+  Sparkles,
+  Code,
+  FileCode,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Wand2,
+  ScanSearch,
+  Layers3,
+  ShieldCheck,
+  Gauge,
+  Braces,
+  MonitorPlay,
+  Cloud,
+  ArrowRight,
+  Zap,
 } from "lucide-react";
 
 type Step = "upload" | "uploading" | "analyzing" | "generating" | "saving" | "done" | "error";
@@ -19,15 +36,15 @@ const progressStepOrder: Step[] = ["uploading", "analyzing", "generating", "savi
 const progressPercentRanges: Record<Exclude<Step, "upload" | "done" | "error">, [number, number]> = {
   uploading: [8, 26],
   analyzing: [28, 48],
-  generating: [50, 86],
-  saving: [88, 96],
+  generating: [50, 88],
+  saving: [90, 97],
 };
 
 const generationStages = [
   "Reading sketch hierarchy",
   "Detecting layout blocks",
   "Naming components",
-  "Writing markup",
+  "Writing semantic markup",
   "Applying responsive styles",
   "Preparing preview files",
 ];
@@ -37,14 +54,14 @@ const liveCodeSnippets: Record<"react-tailwind" | "html-css", string[]> = {
     "export default function App() {",
     "  return (",
     "    <main className=\"min-h-screen bg-slate-950 text-white\">",
-    "      <section className=\"mx-auto grid max-w-6xl gap-6 px-6 py-12\">",
+    "      <section className=\"mx-auto max-w-7xl px-6 py-12\">",
     "        <header className=\"flex items-center justify-between\">",
-    "          <h1 className=\"text-3xl font-bold\">Generated Interface</h1>",
-    "          <button className=\"rounded-lg bg-blue-500 px-4 py-2\">Action</button>",
+    "          <h1 className=\"text-4xl font-black tracking-tight\">Generated Interface</h1>",
+    "          <button className=\"rounded-2xl bg-blue-500 px-5 py-3\">Action</button>",
     "        </header>",
-    "        <div className=\"grid gap-4 md:grid-cols-3\">",
-    "          <article className=\"rounded-xl border border-white/10 p-5\">",
-    "            <h2 className=\"font-semibold\">Sketch section</h2>",
+    "        <div className=\"mt-8 grid gap-4 md:grid-cols-3\">",
+    "          <article className=\"rounded-3xl border border-white/10 p-6\">",
+    "            <h2 className=\"font-bold\">Sketch section</h2>",
     "            <p className=\"mt-2 text-sm text-slate-300\">AI maps your drawing into components.</p>",
     "          </article>",
     "        </div>",
@@ -55,13 +72,13 @@ const liveCodeSnippets: Record<"react-tailwind" | "html-css", string[]> = {
   ],
   "html-css": [
     "<main class=\"page-shell\">",
-    "  <section class=\"hero\">",
+    "  <section class=\"hero-section\">",
     "    <nav class=\"topbar\">",
     "      <strong>Generated Interface</strong>",
     "      <button>Action</button>",
     "    </nav>",
-    "    <div class=\"layout-grid\">",
-    "      <article class=\"panel\">",
+    "    <div class=\"bento-grid\">",
+    "      <article class=\"panel-card\">",
     "        <h2>Sketch section</h2>",
     "        <p>AI maps your drawing into clean frontend code.</p>",
     "      </article>",
@@ -69,9 +86,26 @@ const liveCodeSnippets: Record<"react-tailwind" | "html-css", string[]> = {
     "  </section>",
     "</main>",
     ".page-shell { min-height: 100vh; background: #020617; color: white; }",
-    ".layout-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, 1fr); }",
+    ".bento-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, 1fr); }",
   ],
 };
+
+const modeCards = [
+  {
+    value: "react-tailwind" as const,
+    title: "React + Tailwind",
+    desc: "Best for Next.js / React projects with reusable components.",
+    icon: Code,
+    tone: "border-blue-300/22 bg-blue-400/10 text-blue-200",
+  },
+  {
+    value: "html-css" as const,
+    title: "HTML / CSS / JS",
+    desc: "Best for simple lab demos and direct browser execution.",
+    icon: FileCode,
+    tone: "border-cyan-300/22 bg-cyan-400/10 text-cyan-200",
+  },
+];
 
 function ConvertContent() {
   const { user, isDemo } = useAuth();
@@ -90,7 +124,7 @@ function ConvertContent() {
 
     const interval = window.setInterval(() => {
       setGenerationTick((current) => current + 1);
-    }, step === "generating" ? 180 : 360);
+    }, step === "generating" ? 160 : 340);
 
     return () => window.clearInterval(interval);
   }, [step]);
@@ -100,49 +134,51 @@ function ConvertContent() {
       toast.error("Please select a valid image file (JPG, PNG, or WebP)");
       return;
     }
+
     if (selectedFile.size > 5 * 1024 * 1024) {
       toast.error("File is too large. Maximum 5MB allowed.");
       return;
     }
+
     setFile(selectedFile);
 
-    // Generate preview
     const reader = new FileReader();
     reader.onload = (e) => setPreview(e.target?.result as string);
     reader.readAsDataURL(selectedFile);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) handleFileSelect(droppedFile);
-  }, [handleFileSelect]);
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const droppedFile = event.dataTransfer.files[0];
+      if (droppedFile) handleFileSelect(droppedFile);
+    },
+    [handleFileSelect]
+  );
 
   const handleConvert = async () => {
     if (!file || !preview || !user) return;
 
     try {
       setGenerationTick(0);
-
-      // Step 1: Compress image
       setStep("uploading");
+
       let imageData = preview;
       if (file.size > 2 * 1024 * 1024) {
         imageData = await compressImage(file, 1200, 0.75);
       }
 
-      // Step 2: Upload to Cloudinary
       const uploadRes = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: imageData }),
       });
+
       const uploadData = await uploadRes.json();
       if (!uploadData.success) throw new Error(uploadData.error || "Upload failed");
 
-      // Step 3: Analyze with Gemini
       setStep("analyzing");
-      await new Promise(r => setTimeout(r, 500)); // Brief visual pause
+      await new Promise((resolve) => setTimeout(resolve, 420));
       setStep("generating");
 
       const convertRes = await fetch("/api/convert", {
@@ -157,13 +193,12 @@ function ConvertContent() {
           cloudinaryPublicId: uploadData.data.public_id,
         }),
       });
+
       const convertData = await convertRes.json();
       if (!convertData.success) throw new Error(convertData.error || "Conversion failed");
 
-      // Step 4: Save
       setStep("saving");
 
-      // Save to localStorage for demo mode or local fallback
       if (isDemo || convertData.data.id.startsWith("local-")) {
         const lightweight = {
           id: convertData.data.id,
@@ -174,7 +209,7 @@ function ConvertContent() {
           cloudinaryUrl: convertData.data.cloudinaryUrl || convertData.data.cloudinaryPublicId,
         };
         const existing = getCleanedConversions();
-        const filtered = existing.filter((c: any) => c.id !== convertData.data.id);
+        const filtered = existing.filter((conversion: any) => conversion.id !== convertData.data.id);
         filtered.unshift(lightweight);
         safeSetLocalStorage("blueprint_conversions", JSON.stringify(filtered));
         safeSetLocalStorage(`blueprint_conversion_${convertData.data.id}`, JSON.stringify(convertData.data));
@@ -183,10 +218,9 @@ function ConvertContent() {
       setStep("done");
       toast.success("Conversion complete!");
 
-      // Navigate to workbench
       setTimeout(() => {
         router.push(`/convert/${convertData.data.id}`);
-      }, 1200);
+      }, 900);
     } catch (err: any) {
       console.error("Conversion error:", err);
       setErrorMsg(err.message || "Something went wrong");
@@ -205,170 +239,262 @@ function ConvertContent() {
   };
 
   const progressSteps = [
-    { key: "uploading", label: "Uploading image to cloud...", icon: Upload },
-    { key: "analyzing", label: "AI analyzing sketch layout...", icon: Sparkles },
-    { key: "generating", label: "Generating frontend code...", icon: Code },
-    { key: "saving", label: "Saving to your history...", icon: CheckCircle2 },
+    { key: "uploading", label: "Uploading secure image payload", icon: Cloud },
+    { key: "analyzing", label: "Analyzing sketch modules", icon: ScanSearch },
+    { key: "generating", label: "Generating frontend code", icon: Braces },
+    { key: "saving", label: "Saving your workspace", icon: CheckCircle2 },
   ];
 
   const currentProgressIndex = progressStepOrder.indexOf(step);
   const percentRange =
-    step === "done" || step === "upload" || step === "error"
-      ? null
-      : progressPercentRanges[step];
+    step === "done" || step === "upload" || step === "error" ? null : progressPercentRanges[step];
   const progressPercent =
     step === "done"
       ? 100
       : percentRange
-        ? Math.min(percentRange[1], percentRange[0] + generationTick * (step === "generating" ? 1.3 : 2.8))
+        ? Math.min(percentRange[1], percentRange[0] + generationTick * (step === "generating" ? 1.2 : 2.6))
         : 0;
   const activeGenerationStage =
-    step === "generating"
-      ? Math.min(generationStages.length - 1, Math.floor(generationTick / 7))
-      : Math.max(0, currentProgressIndex);
+    step === "generating" ? Math.min(generationStages.length - 1, Math.floor(generationTick / 7)) : Math.max(0, currentProgressIndex);
   const snippetLines = liveCodeSnippets[outputMode];
   const visibleCodeLineCount =
-    step === "generating"
-      ? Math.min(snippetLines.length, Math.max(4, Math.floor(generationTick / 2) + 3))
-      : Math.min(snippetLines.length, 4);
+    step === "generating" ? Math.min(snippetLines.length, Math.max(4, Math.floor(generationTick / 2) + 3)) : Math.min(snippetLines.length, 5);
   const visibleCodeLines = snippetLines.slice(0, visibleCodeLineCount);
 
   return (
-    <div className="min-h-[calc(100vh-60px)] relative overflow-hidden">
-      {/* Ambient background blobs */}
-      <div className="blob bg-blue-500 w-[500px] h-[500px] top-[-10%] left-[-20%] blob-animate-1" />
-      <div className="blob bg-indigo-500 w-[450px] h-[450px] bottom-[10%] right-[-15%] blob-animate-2" />
+    <div className="premium-shell min-h-[calc(100vh-76px)] overflow-hidden">
+      <div className="aurora-field" />
 
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 relative z-10">
-        <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">New Conversion</h1>
-          <p className="text-sm text-gray-400 mt-1">Upload a hand-drawn wireframe to generate code</p>
+      <div className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8 grid gap-5 lg:grid-cols-[1fr_0.72fr]">
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="premium-card overflow-hidden p-6 sm:p-8">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/12 via-cyan-500/6 to-violet-500/10" />
+            <div className="relative">
+              <span className="pill">
+                <Wand2 className="h-3.5 w-3.5" />
+                New AI conversion
+              </span>
+              <h1 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-5xl">
+                Upload a wireframe and generate a polished frontend.
+              </h1>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
+                Use a clear photo or screenshot. The converter will preserve structure first, then apply responsive premium styling.
+              </p>
+            </div>
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="premium-card p-5">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl border border-emerald-300/15 bg-emerald-400/10 text-emerald-200">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-white">Submission checklist</p>
+                <p className="text-xs text-slate-500">Designed for lab presentation</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2">
+              {["Readable UI", "Responsive output", "Live preview", "ZIP export"].map((item) => (
+                <div key={item} className="flex items-center gap-2 rounded-2xl bg-white/[0.035] px-3 py-2 text-xs font-bold text-slate-300">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </div>
 
         <AnimatePresence mode="wait">
-          {/* ─── UPLOAD STATE ─── */}
           {step === "upload" && (
-            <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              {/* Dropzone */}
-              {!preview ? (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="glass-card p-12 border-2 border-dashed border-gray-600/50 hover:border-blue-500/40 transition-all cursor-pointer text-center group"
-                >
-                  <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-                    <Upload className="h-8 w-8 text-blue-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-200">
-                    Drop your sketch here or click to browse
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-2">Accepts JPG, PNG, WebP · Max 5MB</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-                  />
-                </div>
-              ) : (
-                /* Preview */
-                <div className="glass-card overflow-hidden">
-                  <div className="relative">
-                    <img src={preview} alt="Sketch Preview" className="w-full max-h-[400px] object-contain bg-gray-900/50" />
-                    <button
-                      onClick={resetAll}
-                      className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-gray-300 hover:text-white hover:bg-black/80 transition-all"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="p-6 border-t border-gray-700/50">
-                    <div className="flex items-center gap-3 mb-4">
-                      <ImageIcon className="h-5 w-5 text-gray-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-200 truncate">{file?.name}</p>
-                        <p className="text-xs text-gray-500">{((file?.size || 0) / 1024).toFixed(1)} KB</p>
+            <motion.div
+              key="upload"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
+            >
+              <div className="premium-card overflow-hidden">
+                {!preview ? (
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(event) => event.preventDefault()}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="group relative min-h-[500px] cursor-pointer p-5"
+                  >
+                    <div className="absolute inset-5 rounded-[1.6rem] border-2 border-dashed border-blue-200/18 bg-blue-400/[0.035] transition-all group-hover:border-cyan-200/35 group-hover:bg-cyan-400/[0.045]" />
+                    <div className="relative grid min-h-[460px] place-items-center text-center">
+                      <div className="max-w-md">
+                        <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-[1.6rem] border border-blue-300/22 bg-blue-400/10 text-blue-200 shadow-[0_0_55px_rgba(59,130,246,0.18)] transition-transform group-hover:scale-105">
+                          <Upload className="h-9 w-9" />
+                        </div>
+                        <h2 className="text-2xl font-black text-white">Drop your sketch here</h2>
+                        <p className="mt-3 text-sm leading-7 text-slate-400">
+                          JPG, PNG, or WebP. Maximum 5MB. For best output, upload a straight, high-contrast image.
+                        </p>
+                        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.05] px-4 py-2 text-xs font-black uppercase tracking-wider text-cyan-200">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Click to browse
+                        </div>
                       </div>
                     </div>
-
-                    {/* Output Mode Selection */}
-                    <div className="mb-6">
-                      <label className="block text-xs font-medium text-gray-400 mb-2">Output Framework</label>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => setOutputMode("react-tailwind")}
-                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border ${
-                            outputMode === "react-tailwind"
-                              ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                              : "bg-white/5 text-gray-400 border-gray-700 hover:border-gray-600"
-                          }`}
-                        >
-                          <Code className="h-4 w-4" /> React + Tailwind
-                        </button>
-                        <button
-                          onClick={() => setOutputMode("html-css")}
-                          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium transition-all border ${
-                            outputMode === "html-css"
-                              ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
-                              : "bg-white/5 text-gray-400 border-gray-700 hover:border-gray-600"
-                          }`}
-                        >
-                          <FileCode className="h-4 w-4" /> HTML / CSS
-                        </button>
-                      </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => event.target.files?.[0] && handleFileSelect(event.target.files[0])}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="relative border-b border-white/[0.08] bg-black/20">
+                      <img src={preview} alt="Sketch preview" className="h-[460px] w-full object-contain p-4" />
+                      <button
+                        onClick={resetAll}
+                        className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full border border-white/[0.10] bg-black/50 text-slate-300 backdrop-blur-xl transition-all hover:bg-black/70 hover:text-white"
+                        aria-label="Remove selected sketch"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
 
-                    <button
-                      onClick={handleConvert}
-                      className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-sm font-semibold text-white btn-glow transition-all shadow-lg shadow-blue-500/20"
-                    >
-                      <Sparkles className="h-4 w-4" /> Analyze & Generate Code
-                    </button>
+                    <div className="p-5 sm:p-6">
+                      <div className="mb-5 flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-3">
+                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-400/10 text-blue-200">
+                          <ImageIcon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-white">{file?.name}</p>
+                          <p className="text-xs font-semibold text-slate-500">{((file?.size || 0) / 1024).toFixed(1)} KB selected</p>
+                        </div>
+                      </div>
+
+                      <button onClick={handleConvert} className="btn-primary w-full px-6 py-4 text-sm">
+                        <Sparkles className="h-4 w-4" />
+                        Analyze & generate code
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-5">
+                <div className="premium-card p-5">
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-200">
+                      <Layers3 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-white">Choose output framework</p>
+                      <p className="text-xs text-slate-500">You can switch preview tabs later.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    {modeCards.map((mode) => {
+                      const Icon = mode.icon;
+                      const active = outputMode === mode.value;
+                      return (
+                        <button
+                          key={mode.value}
+                          onClick={() => setOutputMode(mode.value)}
+                          className={`rounded-3xl border p-4 text-left transition-all ${
+                            active
+                              ? `${mode.tone} shadow-[0_0_50px_rgba(59,130,246,0.10)]`
+                              : "border-white/[0.08] bg-white/[0.035] text-slate-400 hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl border ${active ? "border-white/15 bg-white/10" : "border-white/[0.08] bg-white/[0.04]"}`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-white">{mode.title}</p>
+                              <p className="mt-1 text-xs leading-5 text-slate-400">{mode.desc}</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
+
+                <div className="premium-card p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-white">AI quality pipeline</p>
+                      <p className="text-xs text-slate-500">What happens after upload</p>
+                    </div>
+                    <Gauge className="h-5 w-5 text-cyan-200" />
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { icon: ScanSearch, title: "Recognize layout", desc: "Header, sidebar, cards, content zones" },
+                      { icon: Braces, title: "Generate code", desc: "Clean structure and responsive styling" },
+                      { icon: MonitorPlay, title: "Preview safely", desc: "Render in workbench and export ZIP" },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div key={item.title} className="flex gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-3">
+                          <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-200" />
+                          <div>
+                            <p className="text-xs font-black text-white">{item.title}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{item.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
-          {/* ─── PROGRESS STATE ─── */}
           {["uploading", "analyzing", "generating", "saving", "done"].includes(step) && (
-            <motion.div key="progress" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="glass-card p-5 sm:p-8">
+            <motion.div
+              key="progress"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+            >
+              <div className="premium-card overflow-hidden p-5 sm:p-8">
                 {step === "done" ? (
-                  <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="py-8 text-center">
-                    <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-5">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                  <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mx-auto max-w-md py-14 text-center">
+                    <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-[1.6rem] border border-emerald-300/18 bg-emerald-400/10 text-emerald-200 shadow-[0_0_65px_rgba(52,211,153,0.16)]">
+                      <CheckCircle2 className="h-10 w-10" />
                     </div>
-                    <h3 className="text-xl font-bold text-white">Conversion Complete!</h3>
-                    <p className="text-sm text-gray-400 mt-2">Redirecting to your workbench...</p>
+                    <h3 className="text-2xl font-black text-white">Conversion complete</h3>
+                    <p className="mt-2 text-sm text-slate-400">Opening your AI workbench now...</p>
                   </motion.div>
                 ) : (
-                  <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
-                          <Loader2 className="h-7 w-7 text-blue-400 animate-spin" />
+                      <div className="flex items-start gap-4">
+                        <div className="grid h-16 w-16 flex-shrink-0 place-items-center rounded-[1.4rem] border border-blue-300/16 bg-blue-400/10 text-blue-200">
+                          <Loader2 className="h-8 w-8 animate-spin" />
                         </div>
-                        <div className="text-left min-w-0">
-                          <p className="text-sm font-semibold text-blue-300 uppercase tracking-wider">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-300">
                             {step === "generating" ? "Live code draft" : "Conversion progress"}
                           </p>
-                          <h3 className="text-xl font-bold text-white mt-1">
+                          <h3 className="mt-2 text-2xl font-black text-white">
                             {step === "generating" ? generationStages[activeGenerationStage] : progressSteps[currentProgressIndex]?.label}
                           </h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-500">
+                            Keep this tab open while BlueprintAI builds the workspace.
+                          </p>
                         </div>
                       </div>
 
-                      <div className="mt-6">
-                        <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                      <div className="mt-8">
+                        <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-400">
                           <span>{Math.round(progressPercent)}% complete</span>
                           <span>{outputMode === "react-tailwind" ? "React + Tailwind" : "HTML / CSS"}</span>
                         </div>
-                        <div className="h-2 rounded-full bg-gray-800 overflow-hidden">
+                        <div className="h-3 overflow-hidden rounded-full bg-white/[0.06]">
                           <motion.div
-                            className="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-400"
+                            className="h-full rounded-full bg-gradient-to-r from-blue-500 via-cyan-400 to-violet-400 shadow-[0_0_30px_rgba(20,216,255,0.35)]"
                             initial={{ width: 0 }}
                             animate={{ width: `${progressPercent}%` }}
                             transition={{ duration: 0.35, ease: "easeOut" }}
@@ -376,59 +502,60 @@ function ConvertContent() {
                         </div>
                       </div>
 
-                      <div className="space-y-4 mt-7">
+                      <div className="mt-8 space-y-3">
                         {progressSteps.map((ps) => {
                           const Icon = ps.icon;
                           const thisIdx = progressStepOrder.indexOf(ps.key as Step);
                           const isDone = thisIdx < currentProgressIndex;
                           const isCurrent = thisIdx === currentProgressIndex;
                           return (
-                            <div key={ps.key} className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                                isDone ? "bg-emerald-500/10 text-emerald-400" :
-                                isCurrent ? "bg-blue-500/10 text-blue-400" :
-                                "bg-gray-800/50 text-gray-600"
+                            <div key={ps.key} className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
+                              <div className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl ${
+                                isDone
+                                  ? "bg-emerald-400/10 text-emerald-200"
+                                  : isCurrent
+                                    ? "bg-blue-400/10 text-blue-200"
+                                    : "bg-white/[0.04] text-slate-600"
                               }`}>
-                                {isDone ? <CheckCircle2 className="h-4 w-4" /> :
-                                 isCurrent ? <Loader2 className="h-4 w-4 animate-spin" /> :
-                                 <Icon className="h-4 w-4" />}
+                                {isDone ? <CheckCircle2 className="h-4 w-4" /> : isCurrent ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
                               </div>
-                              <span className={`text-sm ${
-                                isDone ? "text-emerald-400" :
-                                isCurrent ? "text-white font-medium" :
-                                "text-gray-600"
-                              }`}>{ps.label}</span>
+                              <span className={`text-sm font-bold ${isCurrent ? "text-white" : isDone ? "text-emerald-200" : "text-slate-600"}`}>
+                                {ps.label}
+                              </span>
                             </div>
                           );
                         })}
                       </div>
                     </div>
 
-                    <div className="min-w-0 rounded-xl border border-gray-800 bg-[#050816] overflow-hidden">
-                      <div className="flex items-center justify-between gap-3 border-b border-gray-800 px-4 py-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Code className="h-4 w-4 text-cyan-400 flex-shrink-0" />
-                          <span className="text-xs font-medium text-gray-300 truncate">
+                    <div className="code-window min-w-0">
+                      <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Code className="h-4 w-4 flex-shrink-0 text-cyan-300" />
+                          <span className="truncate font-mono text-xs font-bold text-slate-300">
                             {outputMode === "react-tailwind" ? "App.tsx" : "index.html + styles.css"}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 rounded-full bg-red-400/80" />
-                          <span className="h-2 w-2 rounded-full bg-amber-400/80" />
-                          <span className="h-2 w-2 rounded-full bg-emerald-400/80" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-amber-300/80" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-emerald-300/80" />
                         </div>
                       </div>
-                      <div className="h-72 overflow-x-auto overflow-y-hidden px-4 py-4 font-mono text-[12px] leading-5 text-left">
+
+                      <div className="h-80 overflow-x-auto overflow-y-hidden px-4 py-4 text-left font-mono text-[12px] leading-6">
                         {visibleCodeLines.map((line, index) => (
                           <div key={`${line}-${index}`} className="flex gap-3">
-                            <span className="w-6 flex-shrink-0 text-right text-gray-600">{index + 1}</span>
-                            <span className={
-                              line.trim().startsWith("<") || line.includes("className") || line.includes("class=")
-                                ? "text-cyan-200"
-                                : line.trim().startsWith("}") || line.trim().startsWith(")")
-                                  ? "text-gray-400"
-                                  : "text-blue-200"
-                            }>
+                            <span className="w-6 flex-shrink-0 text-right text-slate-700">{index + 1}</span>
+                            <span
+                              className={
+                                line.trim().startsWith("<") || line.includes("className") || line.includes("class=")
+                                  ? "text-cyan-100"
+                                  : line.trim().startsWith("}") || line.trim().startsWith(")")
+                                    ? "text-slate-400"
+                                    : "text-blue-100"
+                              }
+                            >
                               {line}
                               {index === visibleCodeLines.length - 1 && step === "generating" && (
                                 <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 animate-pulse bg-cyan-300" />
@@ -436,30 +563,31 @@ function ConvertContent() {
                             </span>
                           </div>
                         ))}
+
                         {step !== "generating" && (
-                          <div className="mt-5 flex items-center gap-2 text-gray-500">
+                          <div className="mt-6 flex items-center gap-2 text-slate-500">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             <span>
-                              {step === "uploading" ? "Preparing image payload..." : step === "analyzing" ? "Waiting for vision analysis..." : "Finalizing files..."}
+                              {step === "uploading" ? "Preparing image upload..." : step === "analyzing" ? "Waiting for vision analysis..." : "Finalizing workspace..."}
                             </span>
                           </div>
                         )}
                       </div>
 
-                      <div className="border-t border-gray-800 px-4 py-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="border-t border-white/[0.08] p-4">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                           {generationStages.map((stage, index) => {
                             const isDone = step === "saving" || index < activeGenerationStage;
                             const isCurrent = step === "generating" && index === activeGenerationStage;
                             return (
                               <div
                                 key={stage}
-                                className={`truncate rounded-md px-2 py-1.5 text-[11px] ${
+                                className={`truncate rounded-xl px-3 py-2 text-[11px] font-bold ${
                                   isDone
-                                    ? "bg-emerald-500/10 text-emerald-300"
+                                    ? "bg-emerald-400/10 text-emerald-200"
                                     : isCurrent
-                                      ? "bg-blue-500/10 text-blue-300"
-                                      : "bg-gray-900 text-gray-600"
+                                      ? "bg-blue-400/10 text-blue-200"
+                                      : "bg-white/[0.035] text-slate-600"
                                 }`}
                               >
                                 {stage}
@@ -475,20 +603,17 @@ function ConvertContent() {
             </motion.div>
           )}
 
-          {/* ─── ERROR STATE ─── */}
           {step === "error" && (
-            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="glass-card p-10 text-center">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-5">
-                  <AlertCircle className="h-8 w-8 text-red-400" />
+            <motion.div key="error" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
+              <div className="premium-card mx-auto max-w-2xl p-10 text-center">
+                <div className="mx-auto mb-6 grid h-18 w-18 place-items-center rounded-[1.5rem] border border-red-300/18 bg-red-400/10 text-red-200">
+                  <AlertCircle className="h-9 w-9" />
                 </div>
-                <h3 className="text-xl font-bold text-white">Conversion Failed</h3>
-                <p className="text-sm text-gray-400 mt-2 max-w-md mx-auto">{errorMsg}</p>
-                <button
-                  onClick={resetAll}
-                  className="mt-6 px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl btn-glow transition-all"
-                >
-                  Try Again
+                <h3 className="text-2xl font-black text-white">Conversion failed</h3>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-400">{errorMsg}</p>
+                <button onClick={resetAll} className="btn-primary mt-7 px-6 py-3 text-sm">
+                  Try again
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </motion.div>

@@ -78,3 +78,4 @@ export async function uploadToCloudinary(
     height: data.height,
   };
 }
+
