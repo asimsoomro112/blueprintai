@@ -26,7 +26,7 @@ import {
   MonitorPlay,
   Cloud,
   ArrowRight,
-  Zap,
+  Camera,
 } from "lucide-react";
 
 type Step = "upload" | "uploading" | "analyzing" | "generating" | "saving" | "done" | "error";
@@ -117,7 +117,14 @@ function ConvertContent() {
   const [step, setStep] = useState<Step>("upload");
   const [errorMsg, setErrorMsg] = useState("");
   const [generationTick, setGenerationTick] = useState(0);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const cameraRequestRef = useRef(0);
 
   useEffect(() => {
     if (!progressStepOrder.includes(step)) return;
@@ -155,6 +162,110 @@ function ConvertContent() {
     },
     [handleFileSelect]
   );
+
+  const stopCamera = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraReady(false);
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    cameraRequestRef.current += 1;
+    stopCamera();
+    setCameraOpen(false);
+    setCameraError("");
+  }, [stopCamera]);
+
+  const handleOpenCamera = useCallback(async () => {
+    const requestId = cameraRequestRef.current + 1;
+    cameraRequestRef.current = requestId;
+    setCameraOpen(true);
+    setCameraError("");
+    setCameraReady(false);
+    stopCamera();
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is not available in this browser.");
+      return;
+    }
+
+    try {
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1600 },
+          height: { ideal: 1200 },
+        },
+      });
+
+      if (cameraRequestRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      mediaStreamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
+      }
+    } catch (error: any) {
+      console.error("Camera error:", error);
+      setCameraError(error?.message || "Could not open the camera. Check browser permissions and try again.");
+      stopCamera();
+    }
+  }, [stopCamera]);
+
+  const handleCapturePhoto = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      toast.error("Camera is not ready yet.");
+      return;
+    }
+
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      toast.error("Could not capture this frame.");
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          toast.error("Could not capture this frame.");
+          return;
+        }
+
+        const capturedFile = new File([blob], `live-sketch-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        });
+
+        void handleFileSelect(capturedFile).then(() => {
+          closeCamera();
+          toast.success("Sketch captured from camera.");
+        });
+      },
+      "image/jpeg",
+      0.9
+    );
+  }, [closeCamera, handleFileSelect]);
+
+  useEffect(() => {
+    return () => stopCamera();
+  }, [stopCamera]);
 
   const handleConvert = async () => {
     if (!file || !preview || !user) return;
@@ -231,6 +342,7 @@ function ConvertContent() {
   };
 
   const resetAll = () => {
+    closeCamera();
     setFile(null);
     setPreview(null);
     setStep("upload");
@@ -275,10 +387,10 @@ function ConvertContent() {
                 New AI conversion
               </span>
               <h1 className="mt-5 text-3xl font-black tracking-tight text-white sm:text-5xl">
-                Upload a wireframe and generate a polished frontend.
+                Upload or capture a wireframe and generate a polished frontend.
               </h1>
               <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
-                Use a clear photo or screenshot. The converter will preserve structure first, then apply responsive premium styling.
+                Use a clear photo, screenshot, or live camera capture. The converter will preserve structure first, then apply responsive premium styling.
               </p>
             </div>
           </motion.div>
@@ -331,9 +443,29 @@ function ConvertContent() {
                         <p className="mt-3 text-sm leading-7 text-slate-400">
                           JPG, PNG, or WebP. Maximum 5MB. For best output, upload a straight, high-contrast image.
                         </p>
-                        <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.05] px-4 py-2 text-xs font-black uppercase tracking-wider text-cyan-200">
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Click to browse
+                        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              fileInputRef.current?.click();
+                            }}
+                            className="btn-secondary px-4 py-2 text-xs"
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                            Browse image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleOpenCamera();
+                            }}
+                            className="btn-primary px-4 py-2 text-xs"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            Live capture
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -616,6 +748,105 @@ function ConvertContent() {
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {cameraOpen && (
+            <motion.div
+              key="camera-capture"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 grid place-items-center bg-slate-950/82 p-4 backdrop-blur-xl"
+              onClick={closeCamera}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 18 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                className="premium-card w-full max-w-3xl overflow-hidden"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] p-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-2xl bg-cyan-400/10 text-cyan-200">
+                      <Camera className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-black text-white">Live capture picture of sketch</p>
+                      <p className="truncate text-xs text-slate-500">Camera preview</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeCamera}
+                    className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full border border-white/[0.10] bg-white/[0.055] text-slate-300 transition-all hover:bg-white/[0.09] hover:text-white"
+                    aria-label="Close camera"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="relative bg-black">
+                  <div className="aspect-[4/3] w-full overflow-hidden">
+                    {cameraError ? (
+                      <div className="grid h-full place-items-center p-8 text-center">
+                        <div>
+                          <AlertCircle className="mx-auto h-10 w-10 text-amber-200" />
+                          <p className="mt-4 text-sm font-bold text-white">{cameraError}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <video
+                          ref={videoRef}
+                          className="h-full w-full object-contain"
+                          autoPlay
+                          muted
+                          playsInline
+                          onCanPlay={() => setCameraReady(true)}
+                        />
+                        {!cameraReady && (
+                          <div className="absolute inset-0 grid place-items-center bg-black/45">
+                            <div className="flex items-center gap-3 rounded-2xl border border-white/[0.10] bg-slate-950/75 px-4 py-3 text-sm font-bold text-slate-200 backdrop-blur-xl">
+                              <Loader2 className="h-4 w-4 animate-spin text-cyan-200" />
+                              Opening camera
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <canvas ref={canvasRef} className="hidden" />
+                </div>
+
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-end">
+                  {cameraError && (
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenCamera()}
+                      className="btn-secondary px-5 py-3 text-sm"
+                    >
+                      <Camera className="h-4 w-4" />
+                      Retry camera
+                    </button>
+                  )}
+                  <button type="button" onClick={closeCamera} className="btn-secondary px-5 py-3 text-sm">
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCapturePhoto}
+                    disabled={!cameraReady || !!cameraError}
+                    className="btn-primary px-5 py-3 text-sm disabled:opacity-50"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Capture sketch
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { convertSketchWithGemini } from "@/lib/gemini";
 import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { normalizeGeneratedReact } from "@/lib/generated-react";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { conversionId, imageBase64, imageUrl, outputMode, userId } = body;
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON request body" },
+        { status: 400 }
+      );
+    }
+
+    const { conversionId, imageBase64, imageUrl, outputMode } = body;
 
     if (!conversionId) {
       return NextResponse.json(
@@ -18,16 +28,20 @@ export async function POST(request: NextRequest) {
       imageBase64 || imageUrl,
       outputMode || "all"
     );
+    const normalizedReact = normalizeGeneratedReact(
+      geminiResult.reactTailwind?.appTsx || "",
+      geminiResult.reactTailwind?.components || {}
+    );
 
     const updates = {
       title: geminiResult.title,
       detectedComponents: geminiResult.detectedComponents,
       layoutDescription: geminiResult.layoutDescription,
-      generatedReactCode: geminiResult.reactTailwind?.appTsx || "",
+      generatedReactCode: normalizedReact.appTsx,
       generatedHtmlCode: geminiResult.htmlCss?.indexHtml || "",
       generatedCssCode: geminiResult.htmlCss?.stylesCss || "",
       generatedJsCode: geminiResult.htmlCss?.scriptJs || "",
-      generatedFiles: geminiResult.reactTailwind?.components || {},
+      generatedFiles: normalizedReact.generatedFiles,
       confidenceScore: geminiResult.confidenceScore,
       warnings: geminiResult.warnings,
       status: "completed" as const,
@@ -50,4 +64,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

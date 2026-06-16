@@ -1,26 +1,5 @@
 import JSZip from "jszip";
-
-function getReactZipFilePaths(fileName: string): string[] {
-  const trimmed = fileName.trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/^\.\//, "");
-  if (!trimmed) return [];
-
-  const withoutSrc = trimmed.replace(/^src\//, "");
-  if (/^app\.(t|j)sx?$/i.test(withoutSrc)) return [];
-
-  const withExtension = /\.(t|j)sx?$/i.test(withoutSrc) ? withoutSrc : `${withoutSrc}.tsx`;
-  const safePath = withExtension
-    .split("/")
-    .filter((part) => part && part !== "." && part !== "..")
-    .join("/");
-
-  if (!safePath) return [];
-
-  if (safePath.includes("/")) {
-    return [safePath];
-  }
-
-  return [safePath, `components/${safePath}`];
-}
+import { buildReactExportFiles } from "@/lib/generated-react";
 
 export async function exportToZip(
   outputMode: "react-tailwind" | "html-css",
@@ -37,6 +16,8 @@ export async function exportToZip(
   const folderName = title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "blueprint-export";
 
   if (outputMode === "react-tailwind") {
+    const reactFiles = buildReactExportFiles(files.appTsx || "", files.generatedFiles || {});
+
     // package.json configuration for Vite + React 19 + Tailwind v4
     zip.file("package.json", JSON.stringify({
       name: folderName,
@@ -52,7 +33,7 @@ export async function exportToZip(
         react: "^19.0.0",
         "react-dom": "^19.0.0",
         "framer-motion": "^12.0.0",
-        "lucide-react": "^0.468.0"
+        "lucide-react": "^1.17.0"
       },
       devDependencies: {
         "@types/react": "^19.0.0",
@@ -118,13 +99,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );`);
 
-    srcFolder.file("App.tsx", files.appTsx || "export default function App() { return <div>Empty app</div>; }");
+    srcFolder.file("App.tsx", reactFiles.appTsx || "export default function App() { return <div>Empty app</div>; }");
     srcFolder.file("index.css", `@import "tailwindcss";`);
 
-    Object.entries(files.generatedFiles || {}).forEach(([fileName, fileCode]) => {
-      getReactZipFilePaths(fileName).forEach((path) => {
-        srcFolder.file(path, fileCode);
-      });
+    Object.entries(reactFiles.generatedFiles || {}).forEach(([fileName, fileCode]) => {
+      srcFolder.file(fileName, fileCode);
     });
     
     zip.file("README.md", `# ${title}
@@ -163,4 +142,3 @@ This HTML/CSS/JS web page was generated automatically by **BlueprintAI**.
 
   return await zip.generateAsync({ type: "blob" });
 }
-

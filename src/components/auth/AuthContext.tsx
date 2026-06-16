@@ -38,7 +38,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(!isFirebaseConfigured());
+  const isDemo = !isFirebaseConfigured();
 
   useEffect(() => {
     if (isDemo) {
@@ -107,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isDemo]);
 
   const login = async (email: string, password: string) => {
     if (isDemo) {
@@ -221,4 +221,3 @@ export function useAuth() {
   }
   return context;
 }
-

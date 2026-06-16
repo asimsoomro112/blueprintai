@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { refineGeneratedWebsiteWithGemini } from "@/lib/gemini";
 import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { normalizeGeneratedReact } from "@/lib/generated-react";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON request body" },
+        { status: 400 }
+      );
+    }
+
     const {
       conversionId,
       instruction,
@@ -40,13 +50,17 @@ export async function POST(request: NextRequest) {
       generatedJsCode: generatedJsCode || "",
       generatedFiles: generatedFiles || {},
     });
+    const normalizedReact = normalizeGeneratedReact(
+      result.reactTailwind.appTsx,
+      result.reactTailwind.components || {}
+    );
 
     const updates = {
-      generatedReactCode: result.reactTailwind.appTsx,
+      generatedReactCode: normalizedReact.appTsx,
       generatedHtmlCode: result.htmlCss.indexHtml,
       generatedCssCode: result.htmlCss.stylesCss,
       generatedJsCode: result.htmlCss.scriptJs,
-      generatedFiles: result.reactTailwind.components || {},
+      generatedFiles: normalizedReact.generatedFiles,
       warnings: result.warnings || [],
       updatedAt: new Date(),
     };
@@ -71,4 +85,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -4,7 +4,6 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import {
@@ -34,173 +33,12 @@ import { isFirebaseConfigured, db } from "@/lib/firebase/client";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { exportToZip } from "@/lib/zip";
 import { getCleanedConversions, safeSetLocalStorage } from "@/lib/utils";
+import { buildReactSandpackFiles, normalizeGeneratedReact } from "@/lib/generated-react";
 
-type SandpackFileMap = Record<string, string | { code: string; active?: boolean }>;
 type AiChatMessage = {
   role: "user" | "assistant";
   content: string;
 };
-
-type RelativeImport = {
-  importPath: string;
-  defaultImport?: string;
-  namedImports: string[];
-};
-
-function getReactPreviewFilePaths(fileName: string): string[] {
-  const trimmed = fileName.trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/^\.\//, "");
-  if (!trimmed) return [];
-
-  const withoutSrc = trimmed.replace(/^src\//, "");
-  if (/^app\.(t|j)sx?$/i.test(withoutSrc)) return [];
-
-  const withExtension = /\.(t|j)sx?$/i.test(withoutSrc) ? withoutSrc : `${withoutSrc}.tsx`;
-  const safePath = withExtension
-    .split("/")
-    .filter((part) => part && part !== "." && part !== "..")
-    .join("/");
-
-  if (!safePath) return [];
-
-  if (safePath.includes("/")) {
-    return [`/${safePath}`];
-  }
-
-  return [`/${safePath}`, `/components/${safePath}`];
-}
-
-function resolveReactImportPath(importPath: string): string | null {
-  const normalized = importPath.replace(/\\/g, "/").replace(/^\.?\//, "");
-  if (!normalized || normalized.startsWith("../")) return null;
-  if (/\.(css|scss|sass)$/i.test(normalized)) {
-    return `/${normalized}`;
-  }
-
-  const withExtension = /\.(t|j)sx?$/i.test(normalized) ? normalized : `${normalized}.tsx`;
-  const safePath = withExtension
-    .split("/")
-    .filter((part) => part && part !== "." && part !== "..")
-    .join("/");
-
-  return safePath ? `/${safePath}` : null;
-}
-
-function isIdentifier(value: string) {
-  return /^[A-Za-z_$][\w$]*$/.test(value);
-}
-
-function getFallbackComponentName(importPath: string) {
-  const fileName = importPath.split("/").filter(Boolean).pop() || "GeneratedSection";
-  const baseName = fileName.replace(/\.(t|j)sx?$/i, "");
-  const pascalName = baseName
-    .split(/[^A-Za-z0-9_$]+/)
-    .filter(Boolean)
-    .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-    .join("");
-
-  return isIdentifier(pascalName) ? pascalName : "GeneratedSection";
-}
-
-function parseRelativeImports(code: string): RelativeImport[] {
-  const imports: RelativeImport[] = [];
-  const fromImportRegex = /import\s+([\s\S]*?)\s+from\s+["'](\.{1,2}\/[^"']+)["'];?/g;
-  const sideEffectImportRegex = /import\s+["'](\.{1,2}\/[^"']+)["'];?/g;
-
-  for (const match of code.matchAll(fromImportRegex)) {
-    const clause = match[1].trim();
-    const importPath = match[2].trim();
-    if (!importPath.startsWith("./") || clause.startsWith("type ")) continue;
-
-    const namedMatch = clause.match(/\{([^}]*)\}/);
-    const namedImports = namedMatch
-      ? namedMatch[1]
-        .split(",")
-        .map((part) => part.trim().split(/\s+as\s+/i)[0]?.trim())
-        .filter((name) => name && isIdentifier(name))
-      : [];
-
-    const defaultCandidate = clause.split(",")[0]?.trim();
-    const defaultImport = defaultCandidate &&
-      !defaultCandidate.startsWith("{") &&
-      !defaultCandidate.startsWith("*") &&
-      isIdentifier(defaultCandidate)
-      ? defaultCandidate
-      : undefined;
-
-    imports.push({ importPath, defaultImport, namedImports });
-  }
-
-  for (const match of code.matchAll(sideEffectImportRegex)) {
-    const importPath = match[1].trim();
-    if (importPath.startsWith("./")) {
-      imports.push({ importPath, namedImports: [] });
-    }
-  }
-
-  return imports;
-}
-
-function hasReactPreviewFile(files: SandpackFileMap, path: string) {
-  if (files[path]) return true;
-  const withoutExtension = path.replace(/\.(t|j)sx?$/i, "");
-  return Object.keys(files).some((filePath) => filePath.replace(/\.(t|j)sx?$/i, "") === withoutExtension);
-}
-
-function createMissingComponentFile(relativeImport: RelativeImport) {
-  if (/\.(css|scss|sass)$/i.test(relativeImport.importPath)) {
-    return "";
-  }
-
-  const fallbackName = getFallbackComponentName(relativeImport.defaultImport || relativeImport.importPath);
-  const defaultName = relativeImport.defaultImport && isIdentifier(relativeImport.defaultImport)
-    ? relativeImport.defaultImport
-    : fallbackName;
-  const namedExports = Array.from(new Set(relativeImport.namedImports))
-    .filter((name) => name !== defaultName);
-
-  const namedCode = namedExports
-    .map((name) => `export function ${name}(_props: Record<string, unknown>) {\n  return <MissingGeneratedSection label="${name}" />;\n}`)
-    .join("\n\n");
-
-  return `import React from "react";
-
-function MissingGeneratedSection({ label }: { label: string }) {
-  return (
-    <section className="rounded-lg border border-dashed border-slate-300 bg-white p-4 text-slate-700">
-      <p className="text-sm font-semibold">{label}</p>
-      <p className="mt-1 text-xs text-slate-500">This generated component file was missing, so BlueprintAI added a safe preview placeholder.</p>
-    </section>
-  );
-}
-
-${namedCode ? `${namedCode}\n\n` : ""}export default function ${defaultName}(_props: Record<string, unknown>) {
-  return <MissingGeneratedSection label="${defaultName}" />;
-}
-`;
-}
-
-function buildReactSandpackFiles(code: string, generatedFiles: Record<string, string> = {}): SandpackFileMap {
-  const files: SandpackFileMap = {
-    "/App.tsx": {
-      code: code || "export default function App() { return <div />; }",
-      active: true,
-    },
-  };
-
-  Object.entries(generatedFiles).forEach(([fileName, fileCode]) => {
-    getReactPreviewFilePaths(fileName).forEach((path) => {
-      files[path] = fileCode;
-    });
-  });
-
-  parseRelativeImports(code).forEach((relativeImport) => {
-    const path = resolveReactImportPath(relativeImport.importPath);
-    if (!path || hasReactPreviewFile(files, path)) return;
-    files[path] = createMissingComponentFile(relativeImport);
-  });
-
-  return files;
-}
 
 // Dynamic imports to avoid SSR issues
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
@@ -341,6 +179,26 @@ function WorkbenchContent() {
     },
   ]);
 
+  const applyConversionToState = useCallback((record: ConversionRecord) => {
+    const normalizedReact = normalizeGeneratedReact(
+      record.generatedReactCode || "",
+      record.generatedFiles || {}
+    );
+    const normalizedRecord: ConversionRecord = {
+      ...record,
+      generatedReactCode: normalizedReact.appTsx,
+      generatedFiles: normalizedReact.generatedFiles,
+    };
+
+    setConversion(normalizedRecord);
+    setCode(normalizedReact.appTsx);
+    setHtmlCode(record.generatedHtmlCode || "");
+    setCssCode(record.generatedCssCode || "");
+    setActiveTab(record.outputMode === "html-css" ? "html" : "react");
+
+    return normalizedRecord;
+  }, []);
+
   useEffect(() => {
     async function load() {
       if (!conversionId || !user) return;
@@ -350,11 +208,8 @@ function WorkbenchContent() {
         if (individualCached) {
           try {
             const found = JSON.parse(individualCached) as ConversionRecord;
-            setConversion(found);
-            setCode(found.generatedReactCode || "");
-            setHtmlCode(found.generatedHtmlCode || "");
-            setCssCode(found.generatedCssCode || "");
-            setActiveTab(found.outputMode === "html-css" ? "html" : "react");
+            const normalized = applyConversionToState(found);
+            safeSetLocalStorage(`blueprint_conversion_${conversionId}`, JSON.stringify(normalized));
             setLoading(false);
             return;
           } catch (error) {
@@ -365,13 +220,9 @@ function WorkbenchContent() {
         const cached = getCleanedConversions();
         const found = cached.find((item: ConversionRecord) => item.id === conversionId);
         if (found) {
-          setConversion(found);
-          setCode(found.generatedReactCode || "");
-          setHtmlCode(found.generatedHtmlCode || "");
-          setCssCode(found.generatedCssCode || "");
-          setActiveTab(found.outputMode === "html-css" ? "html" : "react");
+          const normalized = applyConversionToState(found);
           try {
-            safeSetLocalStorage(`blueprint_conversion_${conversionId}`, JSON.stringify(found));
+            safeSetLocalStorage(`blueprint_conversion_${conversionId}`, JSON.stringify(normalized));
           } catch (error) {
             console.error("Failed to migrate legacy stored conversion:", error);
           }
@@ -384,11 +235,7 @@ function WorkbenchContent() {
         const docSnap = await getDoc(doc(db, "conversions", conversionId));
         if (docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() } as ConversionRecord;
-          setConversion(data);
-          setCode(data.generatedReactCode || "");
-          setHtmlCode(data.generatedHtmlCode || "");
-          setCssCode(data.generatedCssCode || "");
-          setActiveTab(data.outputMode === "html-css" ? "html" : "react");
+          applyConversionToState(data);
         }
       } catch (error) {
         console.error("Error loading conversion:", error);
@@ -399,7 +246,7 @@ function WorkbenchContent() {
     }
 
     load();
-  }, [conversionId, user, isDemo]);
+  }, [conversionId, user, isDemo, applyConversionToState]);
 
   const handleCopy = useCallback(() => {
     const textToCopy = activeTab === "react" ? code : `${htmlCode}\n\n/* CSS */\n${cssCode}`;
@@ -487,13 +334,15 @@ function WorkbenchContent() {
     if (!conversion) return;
     setSaving(true);
     try {
+      const normalizedReact = normalizeGeneratedReact(code, conversion.generatedFiles || {});
+      setCode(normalizedReact.appTsx);
       await persistConversionUpdates(
         {
-          generatedReactCode: code,
+          generatedReactCode: normalizedReact.appTsx,
           generatedHtmlCode: htmlCode,
           generatedCssCode: cssCode,
           generatedJsCode: conversion.generatedJsCode || "",
-          generatedFiles: conversion.generatedFiles || {},
+          generatedFiles: normalizedReact.generatedFiles,
         },
         "Manual edits saved."
       );
@@ -527,8 +376,13 @@ function WorkbenchContent() {
       const newReactCode = data.data.generatedReactCode || code;
       const newHtmlCode = data.data.generatedHtmlCode || htmlCode;
       const newCssCode = data.data.generatedCssCode || cssCode;
+      const newJsCode = data.data.generatedJsCode ?? conversion.generatedJsCode ?? "";
+      const normalizedReact = normalizeGeneratedReact(
+        newReactCode,
+        data.data.generatedFiles || conversion.generatedFiles || {}
+      );
 
-      setCode(newReactCode);
+      setCode(normalizedReact.appTsx);
       setHtmlCode(newHtmlCode);
       setCssCode(newCssCode);
 
@@ -537,10 +391,11 @@ function WorkbenchContent() {
         title: data.data.title || conversion.title,
         detectedComponents: data.data.detectedComponents || conversion.detectedComponents,
         layoutDescription: data.data.layoutDescription || conversion.layoutDescription,
-        generatedReactCode: newReactCode,
+        generatedReactCode: normalizedReact.appTsx,
         generatedHtmlCode: newHtmlCode,
         generatedCssCode: newCssCode,
-        generatedFiles: data.data.generatedFiles || conversion.generatedFiles || {},
+        generatedJsCode: newJsCode,
+        generatedFiles: normalizedReact.generatedFiles,
         confidenceScore: data.data.confidenceScore || conversion.confidenceScore,
         warnings: data.data.warnings || conversion.warnings,
         updatedAt: new Date().toISOString(),
@@ -617,17 +472,18 @@ function WorkbenchContent() {
       const updatedCssCode = data.data.generatedCssCode ?? cssCode;
       const updatedJsCode = data.data.generatedJsCode ?? conversion.generatedJsCode ?? "";
       const updatedFiles = data.data.generatedFiles ?? conversion.generatedFiles ?? {};
+      const normalizedReact = normalizeGeneratedReact(updatedReactCode, updatedFiles);
 
-      setCode(updatedReactCode);
+      setCode(normalizedReact.appTsx);
       setHtmlCode(updatedHtmlCode);
       setCssCode(updatedCssCode);
 
       await persistConversionUpdates({
-        generatedReactCode: updatedReactCode,
+        generatedReactCode: normalizedReact.appTsx,
         generatedHtmlCode: updatedHtmlCode,
         generatedCssCode: updatedCssCode,
         generatedJsCode: updatedJsCode,
-        generatedFiles: updatedFiles,
+        generatedFiles: normalizedReact.generatedFiles,
         warnings: data.data.warnings || conversion.warnings || [],
       });
 

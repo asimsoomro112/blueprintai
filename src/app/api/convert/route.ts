@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { convertSketchWithGemini } from "@/lib/gemini";
 import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { normalizeGeneratedReact } from "@/lib/generated-react";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON request body" },
+        { status: 400 }
+      );
+    }
+
     const { imageBase64, imageUrl, outputMode, userId, fileName, cloudinaryPublicId } = body;
 
     if (!imageBase64 && !imageUrl) {
@@ -53,6 +63,10 @@ export async function POST(request: NextRequest) {
       imageBase64 || imageUrl,
       outputMode || "all"
     );
+    const normalizedReact = normalizeGeneratedReact(
+      geminiResult.reactTailwind?.appTsx || "",
+      geminiResult.reactTailwind?.components || {}
+    );
 
     // Build conversion document
     const conversionData = {
@@ -66,11 +80,11 @@ export async function POST(request: NextRequest) {
       outputMode: outputMode || "react-tailwind",
       detectedComponents: geminiResult.detectedComponents,
       layoutDescription: geminiResult.layoutDescription,
-      generatedReactCode: geminiResult.reactTailwind?.appTsx || "",
+      generatedReactCode: normalizedReact.appTsx,
       generatedHtmlCode: geminiResult.htmlCss?.indexHtml || "",
       generatedCssCode: geminiResult.htmlCss?.stylesCss || "",
       generatedJsCode: geminiResult.htmlCss?.scriptJs || "",
-      generatedFiles: geminiResult.reactTailwind?.components || {},
+      generatedFiles: normalizedReact.generatedFiles,
       status: "completed" as const,
       confidenceScore: geminiResult.confidenceScore,
       warnings: geminiResult.warnings,
@@ -100,4 +114,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

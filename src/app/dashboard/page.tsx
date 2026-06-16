@@ -29,7 +29,7 @@ import {
   ShieldCheck,
   Database,
 } from "lucide-react";
-import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, deleteDoc, doc } from "firebase/firestore";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
 import type { ConversionRecord } from "@/types";
 import { formatRelativeTime, truncate, getCleanedConversions, safeSetLocalStorage } from "@/lib/utils";

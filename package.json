@@ -9,6 +9,9 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "overrides": {
+    "dompurify": "3.4.10"
+  },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",
     "@google/generative-ai": "^0.24.1",

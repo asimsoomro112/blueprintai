@@ -3,7 +3,16 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON request body" },
+        { status: 400 }
+      );
+    }
+
     const { image } = body;
 
     if (!image) {
@@ -48,4 +57,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

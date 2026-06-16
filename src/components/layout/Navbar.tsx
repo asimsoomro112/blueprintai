@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
   LayoutDashboard,
-  Upload,
   Settings,
   LogOut,
   Menu,

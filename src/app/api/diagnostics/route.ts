@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { isCloudinaryConfigured } from "@/lib/cloudinary";
 import { isGeminiConfigured } from "@/lib/gemini";
 import { isFirebaseAdminConfigured } from "@/lib/firebase/admin";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     return NextResponse.json({
       success: true,
@@ -20,4 +20,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-
